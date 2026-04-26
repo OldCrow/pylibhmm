@@ -8,7 +8,7 @@
 
 ## libhmm version
 
-Current binding baseline is `libhmm` tag `v3.1.1`.
+Current binding baseline is `libhmm` tag `v3.1.2`.
 
 ## SIMD and wheel portability
 
