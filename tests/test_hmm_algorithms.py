@@ -1,7 +1,6 @@
 import numpy as np
 from pathlib import Path
 import tempfile
-import pytest
 
 import pylibhmm
 
@@ -54,8 +53,5 @@ def test_xml_roundtrip(simple_hmm):
         pylibhmm.save_hmm(simple_hmm, model_path)
         assert model_path.exists()
         assert model_path.stat().st_size > 0
-        try:
-            loaded = pylibhmm.load_hmm(model_path)
-        except ValueError:
-            pytest.xfail("libhmm XML reader rejected generated XML on this platform")
+        loaded = pylibhmm.load_hmm(model_path)
     assert loaded.num_states == simple_hmm.num_states
