@@ -22,6 +22,62 @@ Primary goals:
 - `tests/` — pytest coverage
 - `docs/` — API and contributor docs
 
+## Session Start Baseline Workflow (Required)
+
+At the start of every session, do these steps in order:
+
+1. Verify machine architecture (OS + CPU) and Python architecture.
+2. Select the platform-specific build path for this host.
+3. Build/install/test only after architecture is confirmed.
+
+Architecture checks:
+
+```bash
+# macOS/Linux shells
+uname -m
+uname -s
+python -c "import platform, struct; print(platform.system(), platform.machine(), struct.calcsize('P')*8)"
+```
+
+```powershell
+# Windows PowerShell
+[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+[System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+python -c "import platform, struct; print(platform.system(), platform.machine(), struct.calcsize('P')*8)"
+```
+
+## Platform-specific build requirements
+
+### macOS (non-Catalina)
+
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.1.2`.
+- Ensure the active Python and `libhmm` build target the same architecture.
+
+```bash
+python -m pip install -e ".[test]" -Ccmake.build-type=Release
+python -m pytest tests -v --tb=short
+```
+
+### macOS Catalina (10.15)
+
+- When `pylibhmm` builds local/fetched `libhmm`, apply `libhmm` Catalina rules from `../libhmm/WARP.md`:
+  - use `../libhmm/scripts/configure_catalina.sh build` (run from the `libhmm` repo) for fresh `libhmm` configuration,
+  - avoid Homebrew LLVM/libc++ hints on Catalina unless explicit troubleshooting is required.
+- If you must override the guard for troubleshooting only, pass `-Ccmake.define.LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX=ON`.
+
+### Windows (MSVC)
+
+- Use Visual Studio 2022 x64 generator for reproducible MSVC builds.
+- Keep the architecture check mandatory; `libhmm` SIMD selection and resulting binaries are architecture-dependent.
+
+```powershell
+python -m pip install -e ".[test]" `
+  -Ccmake.define.CMAKE_GENERATOR="Visual Studio 17 2022" `
+  -Ccmake.define.CMAKE_GENERATOR_PLATFORM=x64 `
+  -Ccmake.build-type=Release
+python -m pytest tests -v --tb=short
+```
+
 ## Canonical commands
 
 ```powershell
