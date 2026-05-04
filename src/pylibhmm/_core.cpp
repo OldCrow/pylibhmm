@@ -1,6 +1,39 @@
 /// pylibhmm native extension.
 ///
-/// Binds core libhmm model, calculator, trainer, and distribution APIs.
+/// Binds core libhmm model, calculator, trainer, and distribution APIs to
+/// Python via nanobind.  The module is organised as five focused binder
+/// functions (bind_distributions, bind_hmm, bind_calculators, bind_trainers,
+/// bind_io) called from NB_MODULE.
+///
+/// Design notes
+/// ============
+///
+/// Array I/O
+///   All NumPy ⇔ libhmm conversions go through _common.h helpers.  Buffers
+///   are copied into libhmm value types (Vector, Matrix, ObservationSet);
+///   no raw pointer aliasing between Python and C++ storage.
+///
+/// Distribution cloning
+///   Hmm::set_distribution takes ownership.  clone_distribution dispatches
+///   through clone_registry (std::type_index → copy-ctor wrapper) for O(1)
+///   lookup, avoiding a linear dynamic_cast chain.
+///
+/// GIL handling
+///   Calls to train(), compute(), and decode() release the Python GIL via
+///   nb::gil_scoped_release so other Python threads can run concurrently.
+///
+/// Lifetime management
+///   Calculator and trainer constructors carry nb::keep_alive<1,2>() so
+///   nanobind keeps the HMM alive at least as long as the dependent object.
+///   get_distribution() returns a borrowed raw pointer
+///   (nb::rv_policy::reference_internal) into the HMM's internal storage;
+///   it must not outlive the Hmm.
+///
+/// Compiler portability
+///   PYLIBHMM_HAS_REQUIRES_EXPR selects C++20 requires expressions (preferred)
+///   vs. C++17 std::void_t detection traits (fallback for Apple Clang 12 /
+///   Catalina, which reports __cpp_concepts=201907L and rejects requires in
+///   if constexpr conditions).
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -188,6 +221,8 @@ CloneFn make_clone() {
     };
 }
 
+/// Returns the global clone registry, initialised once on first call.
+/// The static-local initialisation is thread-safe per C++11 §6.7.
 const std::unordered_map<std::type_index, CloneFn> &clone_registry() {
     static const std::unordered_map<std::type_index, CloneFn> reg{
         {typeid(BetaDistribution),             make_clone<BetaDistribution>()},
@@ -380,6 +415,9 @@ void bind_hmm(nb::module_ &m) {
              },
              nb::arg("state"),
              nb::arg("distribution"))
+        // rv_policy::reference_internal: returns a raw pointer that borrows
+        // from the Hmm's internal storage.  nanobind keeps the Hmm alive as
+        // long as the caller holds a reference to the returned distribution.
         .def("get_distribution",
              [](Hmm &h, std::size_t state) -> EmissionDistribution * {
                  return &h.getDistribution(state);
@@ -397,15 +435,22 @@ void bind_hmm(nb::module_ &m) {
 // bind_calculators — ForwardBackwardCalculator and ViterbiCalculator.
 // ---------------------------------------------------------------------------
 void bind_calculators(nb::module_ &m) {
+    // keep_alive<1,2>: the HMM (arg 2) is kept alive at least as long as
+    // the calculator (arg 1 = self), preventing use-after-free on the
+    // non-owning reference the calculator holds to its model.
     nb::class_<ForwardBackwardCalculator>(m, "ForwardBackwardCalculator")
         .def(
             "__init__",
+            // Placement-new is the nanobind pattern for types whose C++
+            // constructor takes non-trivial arguments.
             [](ForwardBackwardCalculator *self, const Hmm &h, NpArray1DIn observations) {
                 new (self) ForwardBackwardCalculator(h, observation_set_from_numpy(observations));
             },
             nb::arg("hmm"),
             nb::arg("observations").noconvert(),
             nb::keep_alive<1, 2>())
+        // GIL is released for the compute pass so other Python threads
+        // can run concurrently while C++ processes the observation sequence.
         .def("compute",
              [](ForwardBackwardCalculator &calc, NpArray1DIn observations) {
                  auto obs = observation_set_from_numpy(observations);
@@ -471,6 +516,8 @@ void bind_trainers(nb::module_ &m) {
     m.def("training_preset_balanced", []() { return training_presets::balanced(); });
     m.def("training_preset_precise", []() { return training_presets::precise(); });
 
+    // keep_alive<1,2> ensures the HMM outlives the trainer, which holds a
+    // non-owning reference through potentially many training iterations.
     nb::class_<BaumWelchTrainer>(m, "BaumWelchTrainer")
         .def(
             "__init__",
@@ -482,6 +529,8 @@ void bind_trainers(nb::module_ &m) {
             nb::arg("sequences"),
             nb::keep_alive<1, 2>())
         .def("train",
+             // Release the GIL: a full EM iteration can be expensive and
+             // should not block other Python threads for its duration.
              [](BaumWelchTrainer &trainer) {
                  nb::gil_scoped_release release;
                  trainer.train();
