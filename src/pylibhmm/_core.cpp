@@ -8,8 +8,12 @@
 #include <nanobind/stl/vector.h>
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <span>
+#include <type_traits>
+#include <typeindex>
+#include <unordered_map>
 
 #include <libhmm/calculators/forward_backward_calculator.h>
 #include <libhmm/calculators/viterbi_calculator.h>
@@ -42,6 +46,54 @@ namespace nb = nanobind;
 using namespace libhmm;
 
 namespace {
+
+// ---------------------------------------------------------------------------
+// Capability detection for optional distribution methods.
+//
+// Primary path: C++20 requires expressions in if constexpr conditions.
+// Fallback path: C++17 std::void_t detection idiom, used on compilers that
+// advertise partial C++20 concepts support but do not accept requires
+// expressions as constexpr conditions (e.g. Apple Clang 12, Xcode 12,
+// macOS Catalina 10.15 — reports __cpp_concepts=201907L).
+// ---------------------------------------------------------------------------
+#if defined(__cpp_concepts) && __cpp_concepts >= 202002L
+#  define PYLIBHMM_HAS_REQUIRES_EXPR 1
+#else
+#  define PYLIBHMM_HAS_REQUIRES_EXPR 0
+
+template <typename T, typename = void>
+struct has_get_cumulative_probability : std::false_type {};
+template <typename T>
+struct has_get_cumulative_probability<T,
+    std::void_t<decltype(std::declval<const T &>().getCumulativeProbability(0.0))>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct has_CDF : std::false_type {};
+template <typename T>
+struct has_CDF<T, std::void_t<decltype(std::declval<const T &>().CDF(0.0))>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct has_get_mean : std::false_type {};
+template <typename T>
+struct has_get_mean<T, std::void_t<decltype(std::declval<const T &>().getMean())>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct has_get_variance : std::false_type {};
+template <typename T>
+struct has_get_variance<T, std::void_t<decltype(std::declval<const T &>().getVariance())>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct has_get_standard_deviation : std::false_type {};
+template <typename T>
+struct has_get_standard_deviation<T,
+    std::void_t<decltype(std::declval<const T &>().getStandardDeviation())>>
+    : std::true_type {};
+
+#endif // !PYLIBHMM_HAS_REQUIRES_EXPR
 
 template <typename Dist, typename PyClass>
 void bind_distribution_common(PyClass &cls) {
@@ -78,6 +130,7 @@ void bind_distribution_common(PyClass &cls) {
         .def_prop_ro("is_discrete", &Dist::isDiscrete)
         .def("__repr__", [](const Dist &d) { return d.toString(); });
 
+#if PYLIBHMM_HAS_REQUIRES_EXPR
     if constexpr (requires(const Dist &d, double x) { d.getCumulativeProbability(x); }) {
         cls.def("cdf",
                 [](const Dist &d, double x) { return d.getCumulativeProbability(x); },
@@ -89,7 +142,6 @@ void bind_distribution_common(PyClass &cls) {
                 nb::arg("x"),
                 "Evaluate scalar cumulative distribution function.");
     }
-
     if constexpr (requires(const Dist &d) { d.getMean(); }) {
         cls.def_prop_ro("mean", &Dist::getMean);
     }
@@ -99,66 +151,79 @@ void bind_distribution_common(PyClass &cls) {
     if constexpr (requires(const Dist &d) { d.getStandardDeviation(); }) {
         cls.def_prop_ro("std", &Dist::getStandardDeviation);
     }
+#else  // void_t fallback for Apple Clang 12 / Catalina
+    if constexpr (has_get_cumulative_probability<Dist>::value) {
+        cls.def("cdf",
+                [](const Dist &d, double x) { return d.getCumulativeProbability(x); },
+                nb::arg("x"),
+                "Evaluate scalar cumulative distribution function.");
+    } else if constexpr (has_CDF<Dist>::value) {
+        cls.def("cdf",
+                [](const Dist &d, double x) { return d.CDF(x); },
+                nb::arg("x"),
+                "Evaluate scalar cumulative distribution function.");
+    }
+    if constexpr (has_get_mean<Dist>::value) {
+        cls.def_prop_ro("mean", &Dist::getMean);
+    }
+    if constexpr (has_get_variance<Dist>::value) {
+        cls.def_prop_ro("variance", &Dist::getVariance);
+    }
+    if constexpr (has_get_standard_deviation<Dist>::value) {
+        cls.def_prop_ro("std", &Dist::getStandardDeviation);
+    }
+#endif // PYLIBHMM_HAS_REQUIRES_EXPR
 }
 
-std::unique_ptr<EmissionDistribution>
+// ---------------------------------------------------------------------------
+// Distribution clone registry — maps std::type_index to a copy-constructor
+// wrapper. Eliminates the linear dynamic_cast chain for set_distribution.
+// ---------------------------------------------------------------------------
+using CloneFn = std::function<std::unique_ptr<EmissionDistribution>(const EmissionDistribution &)>;
+
+template <typename Dist>
+CloneFn make_clone() {
+    return [](const EmissionDistribution &base) -> std::unique_ptr<EmissionDistribution> {
+        return std::make_unique<Dist>(static_cast<const Dist &>(base));
+    };
+}
+
+const std::unordered_map<std::type_index, CloneFn> &clone_registry() {
+    static const std::unordered_map<std::type_index, CloneFn> reg{
+        {typeid(BetaDistribution),             make_clone<BetaDistribution>()},
+        {typeid(BinomialDistribution),         make_clone<BinomialDistribution>()},
+        {typeid(ChiSquaredDistribution),       make_clone<ChiSquaredDistribution>()},
+        {typeid(DiscreteDistribution),         make_clone<DiscreteDistribution>()},
+        {typeid(ExponentialDistribution),      make_clone<ExponentialDistribution>()},
+        {typeid(GammaDistribution),            make_clone<GammaDistribution>()},
+        {typeid(GaussianDistribution),         make_clone<GaussianDistribution>()},
+        {typeid(LogNormalDistribution),        make_clone<LogNormalDistribution>()},
+        {typeid(NegativeBinomialDistribution), make_clone<NegativeBinomialDistribution>()},
+        {typeid(ParetoDistribution),           make_clone<ParetoDistribution>()},
+        {typeid(PoissonDistribution),          make_clone<PoissonDistribution>()},
+        {typeid(RayleighDistribution),         make_clone<RayleighDistribution>()},
+        {typeid(StudentTDistribution),         make_clone<StudentTDistribution>()},
+        {typeid(UniformDistribution),          make_clone<UniformDistribution>()},
+        {typeid(WeibullDistribution),          make_clone<WeibullDistribution>()},
+    };
+    return reg;
+}
+
+/// Returns a heap-allocated copy of @p distribution.
+/// @throws nb::type_error if the concrete type is not registered.
+[[nodiscard]] std::unique_ptr<EmissionDistribution>
 clone_distribution(const EmissionDistribution &distribution) {
-    if (auto *d = dynamic_cast<const DiscreteDistribution *>(&distribution)) {
-        return std::make_unique<DiscreteDistribution>(*d);
+    const auto it = clone_registry().find(typeid(distribution));
+    if (it == clone_registry().end()) {
+        throw nb::type_error("Unsupported EmissionDistribution subtype");
     }
-    if (auto *d = dynamic_cast<const BinomialDistribution *>(&distribution)) {
-        return std::make_unique<BinomialDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const NegativeBinomialDistribution *>(&distribution)) {
-        return std::make_unique<NegativeBinomialDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const PoissonDistribution *>(&distribution)) {
-        return std::make_unique<PoissonDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const GaussianDistribution *>(&distribution)) {
-        return std::make_unique<GaussianDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const ExponentialDistribution *>(&distribution)) {
-        return std::make_unique<ExponentialDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const GammaDistribution *>(&distribution)) {
-        return std::make_unique<GammaDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const LogNormalDistribution *>(&distribution)) {
-        return std::make_unique<LogNormalDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const ParetoDistribution *>(&distribution)) {
-        return std::make_unique<ParetoDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const BetaDistribution *>(&distribution)) {
-        return std::make_unique<BetaDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const UniformDistribution *>(&distribution)) {
-        return std::make_unique<UniformDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const WeibullDistribution *>(&distribution)) {
-        return std::make_unique<WeibullDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const RayleighDistribution *>(&distribution)) {
-        return std::make_unique<RayleighDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const StudentTDistribution *>(&distribution)) {
-        return std::make_unique<StudentTDistribution>(*d);
-    }
-    if (auto *d = dynamic_cast<const ChiSquaredDistribution *>(&distribution)) {
-        return std::make_unique<ChiSquaredDistribution>(*d);
-    }
-    throw nb::type_error("Unsupported EmissionDistribution subtype");
+    return it->second(distribution);
 }
 
-} // namespace
-
-NB_MODULE(_core, m) {
-    m.doc() = "pylibhmm native extension module";
-
-    // -----------------------------------------------------------------------
-    // Base emission interface
-    // -----------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// bind_distributions — base EmissionDistribution and all concrete subtypes.
+// ---------------------------------------------------------------------------
+void bind_distributions(nb::module_ &m) {
     auto emission = nb::class_<EmissionDistribution>(m, "EmissionDistribution");
     emission.def("pdf", &EmissionDistribution::getProbability, nb::arg("x"))
         .def("log_pdf", &EmissionDistribution::getLogProbability, nb::arg("x"))
@@ -166,9 +231,6 @@ NB_MODULE(_core, m) {
         .def_prop_ro("is_discrete", &EmissionDistribution::isDiscrete)
         .def("__repr__", [](const EmissionDistribution &d) { return d.toString(); });
 
-    // -----------------------------------------------------------------------
-    // Distributions
-    // -----------------------------------------------------------------------
     auto discrete = nb::class_<DiscreteDistribution, EmissionDistribution>(
         m, "Discrete", "Discrete categorical distribution.");
     discrete.def(nb::init<int>(), nb::arg("num_symbols") = 10)
@@ -283,10 +345,12 @@ NB_MODULE(_core, m) {
                      &ChiSquaredDistribution::getDegreesOfFreedom,
                      &ChiSquaredDistribution::setDegreesOfFreedom);
     bind_distribution_common<ChiSquaredDistribution>(chi_squared);
+}
 
-    // -----------------------------------------------------------------------
-    // HMM model
-    // -----------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// bind_hmm — the HMM model class.
+// ---------------------------------------------------------------------------
+void bind_hmm(nb::module_ &m) {
     auto hmm = nb::class_<Hmm>(m, "Hmm", "Hidden Markov Model.");
     hmm.def(nb::init<std::size_t>(), nb::arg("num_states"))
         .def_prop_ro("num_states", &Hmm::getNumStatesModern)
@@ -327,10 +391,12 @@ NB_MODULE(_core, m) {
                  return h.getDistribution(state).toString();
              },
              nb::arg("state"));
+}
 
-    // -----------------------------------------------------------------------
-    // Calculators
-    // -----------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// bind_calculators — ForwardBackwardCalculator and ViterbiCalculator.
+// ---------------------------------------------------------------------------
+void bind_calculators(nb::module_ &m) {
     nb::class_<ForwardBackwardCalculator>(m, "ForwardBackwardCalculator")
         .def(
             "__init__",
@@ -388,10 +454,12 @@ NB_MODULE(_core, m) {
                  return state_sequence_to_numpy(calc.getStateSequence());
              })
         .def_prop_ro("num_states", &ViterbiCalculator::getNumStates);
+}
 
-    // -----------------------------------------------------------------------
-    // Trainers and config
-    // -----------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// bind_trainers — TrainingConfig, preset factories, and all trainer classes.
+// ---------------------------------------------------------------------------
+void bind_trainers(nb::module_ &m) {
     nb::class_<TrainingConfig>(m, "TrainingConfig")
         .def(nb::init<>())
         .def_rw("convergence_tolerance", &TrainingConfig::convergenceTolerance)
@@ -456,10 +524,12 @@ NB_MODULE(_core, m) {
                  trainer.train();
              })
         .def_prop_ro("is_terminated", &SegmentalKMeansTrainer::isTerminated);
+}
 
-    // -----------------------------------------------------------------------
-    // XML I/O
-    // -----------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// bind_io — XML file-based HMM serialization.
+// ---------------------------------------------------------------------------
+void bind_io(nb::module_ &m) {
     m.def("load_hmm",
           [](const std::string &filepath) {
               XMLFileReader reader;
@@ -475,4 +545,15 @@ NB_MODULE(_core, m) {
           nb::arg("hmm"),
           nb::arg("filepath"),
           "Save an HMM to an XML file.");
+}
+
+} // namespace
+
+NB_MODULE(_core, m) {
+    m.doc() = "pylibhmm native extension module";
+    bind_distributions(m);
+    bind_hmm(m);
+    bind_calculators(m);
+    bind_trainers(m);
+    bind_io(m);
 }
