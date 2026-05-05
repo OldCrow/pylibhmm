@@ -7,7 +7,8 @@ coercion so callers can pass plain lists, arrays, or any array-like without
 worrying about dtype or memory layout.
 
 Distributions are re-exported as top-level names (e.g. ``pylibhmm.Gaussian``).
-Model I/O is available via :func:`load_hmm` and :func:`save_hmm`.
+Model I/O is available via :func:`save_json` / :func:`load_json` (JSON, recommended)
+or :func:`save_hmm` / :func:`load_hmm` (XML, legacy).
 
 Example::
 
@@ -266,6 +267,9 @@ class SegmentalKMeansTrainer(_core.SegmentalKMeansTrainer):
         super().__init__(hmm, _as_sequence_list(sequences))
 
 
+# repr(d) returns the distribution's text representation.
+# Use named properties (d.mu, d.sigma, …) for programmatic parameter access
+# rather than parsing the repr string.
 EmissionDistribution = _core.EmissionDistribution
 
 Discrete = _core.Discrete
@@ -290,8 +294,67 @@ training_preset_balanced = _core.training_preset_balanced
 training_preset_precise = _core.training_preset_precise
 
 
+def to_json(hmm: Hmm) -> str:
+    """Serialize an HMM to a compact JSON string.
+
+    Args:
+        hmm: The model to serialize.
+
+    Returns:
+        JSON string that round-trips exactly through :func:`from_json`.
+    """
+    return _core.to_json(hmm)
+
+
+def from_json(src: str) -> Hmm:
+    """Deserialize an HMM from a JSON string produced by :func:`to_json`.
+
+    Args:
+        src: JSON string.
+
+    Returns:
+        Reconstructed :class:`Hmm` instance.
+
+    Raises:
+        RuntimeError: On malformed input.
+    """
+    return _core.from_json(src)
+
+
+def save_json(hmm: Hmm, filepath: str | Path) -> None:
+    """Write an HMM as JSON to *filepath*.
+
+    Args:
+        hmm: The model to serialize.
+        filepath: Destination path.
+
+    Raises:
+        RuntimeError: If the file cannot be written.
+    """
+    _core.save_json(hmm, str(filepath))
+
+
+def load_json(filepath: str | Path) -> Hmm:
+    """Read and deserialize an HMM from a JSON file.
+
+    Args:
+        filepath: Path to a JSON model file written by :func:`save_json`.
+
+    Returns:
+        Reconstructed :class:`Hmm` instance.
+
+    Raises:
+        RuntimeError: If the file cannot be read or parsed.
+    """
+    return _core.load_json(str(filepath))
+
+
 def load_hmm(filepath: str | Path):
-    """Load an HMM from an XML file written by :func:`save_hmm`.
+    """Load an HMM from a legacy XML file written by :func:`save_hmm`.
+
+    .. deprecated::
+        Prefer :func:`load_json` for new code.  XML support is retained
+        for reading existing files only.
 
     Args:
         filepath: Path to the XML model file.
@@ -306,10 +369,11 @@ def load_hmm(filepath: str | Path):
 
 
 def save_hmm(hmm: Hmm, filepath: str | Path) -> None:
-    """Save an HMM to an XML file.
+    """Save an HMM to a legacy XML file.
 
-    The format is compatible with libhmm's XMLFileReader/XMLFileWriter.
-    Distribution types and all parameters are preserved.
+    .. deprecated::
+        Prefer :func:`save_json` for new code.  XML support is retained
+        for producing files readable by older tooling only.
 
     Args:
         hmm: The model to serialize.
@@ -345,8 +409,12 @@ __all__ = [
     "ViterbiCalculator",
     "ViterbiTrainer",
     "Weibull",
+    "from_json",
     "load_hmm",
+    "load_json",
     "save_hmm",
+    "save_json",
+    "to_json",
     "training_preset_balanced",
     "training_preset_fast",
     "training_preset_precise",

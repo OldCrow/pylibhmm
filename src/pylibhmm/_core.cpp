@@ -41,6 +41,7 @@
 #include <nanobind/stl/vector.h>
 
 #include <cstddef>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <span>
@@ -67,6 +68,7 @@
 #include <libhmm/distributions/uniform_distribution.h>
 #include <libhmm/distributions/weibull_distribution.h>
 #include <libhmm/hmm.h>
+#include <libhmm/io/hmm_json.h>
 #include <libhmm/io/xml_file_reader.h>
 #include <libhmm/io/xml_file_writer.h>
 #include <libhmm/training/baum_welch_trainer.h>
@@ -161,6 +163,8 @@ void bind_distribution_common(PyClass &cls) {
              "Fit distribution parameters to weighted data.")
         .def("reset", &Dist::reset, "Reset distribution parameters to defaults.")
         .def_prop_ro("is_discrete", &Dist::isDiscrete)
+        // repr(d) returns the distribution's text representation (toString()).
+        // Use named properties (d.mu, d.sigma, …) for programmatic parameter access.
         .def("__repr__", [](const Dist &d) { return d.toString(); });
 
 #if PYLIBHMM_HAS_REQUIRES_EXPR
@@ -264,6 +268,7 @@ void bind_distributions(nb::module_ &m) {
         .def("log_pdf", &EmissionDistribution::getLogProbability, nb::arg("x"))
         .def("reset", &EmissionDistribution::reset)
         .def_prop_ro("is_discrete", &EmissionDistribution::isDiscrete)
+        // repr(d) returns the distribution's text representation (toString()).
         .def("__repr__", [](const EmissionDistribution &d) { return d.toString(); });
 
     auto discrete = nb::class_<DiscreteDistribution, EmissionDistribution>(
@@ -424,11 +429,15 @@ void bind_hmm(nb::module_ &m) {
              },
              nb::arg("state"),
              nb::rv_policy::reference_internal)
+        // Returns the text representation of the distribution at 'state'.
+        // For programmatic access to parameters, use get_distribution(state)
+        // and read named properties directly.
         .def("get_distribution_name",
              [](const Hmm &h, std::size_t state) {
                  return h.getDistribution(state).toString();
              },
-             nb::arg("state"));
+             nb::arg("state"),
+             "Return the text representation of the emission distribution at state.");
 }
 
 // ---------------------------------------------------------------------------
@@ -576,16 +585,41 @@ void bind_trainers(nb::module_ &m) {
 }
 
 // ---------------------------------------------------------------------------
-// bind_io — XML file-based HMM serialization.
+// bind_io — JSON (recommended) and XML (legacy) HMM serialization.
 // ---------------------------------------------------------------------------
 void bind_io(nb::module_ &m) {
+    // ---- JSON (recommended as of libhmm v3.4.0) ----
+    m.def("to_json",
+          [](const Hmm &hmm_model) { return libhmm::to_json(hmm_model); },
+          nb::arg("hmm"),
+          "Serialize an HMM to a compact JSON string.");
+    m.def("from_json",
+          [](const std::string &src) { return libhmm::from_json(src); },
+          nb::arg("src"),
+          "Deserialize an HMM from a JSON string produced by to_json(). "
+          "Raises RuntimeError on malformed input.");
+    m.def("save_json",
+          [](const Hmm &hmm_model, const std::string &filepath) {
+              libhmm::save_json(hmm_model, std::filesystem::path{filepath});
+          },
+          nb::arg("hmm"),
+          nb::arg("filepath"),
+          "Write an HMM as JSON to filepath.");
+    m.def("load_json",
+          [](const std::string &filepath) {
+              return libhmm::load_json(std::filesystem::path{filepath});
+          },
+          nb::arg("filepath"),
+          "Read and deserialize an HMM from a JSON file.");
+
+    // ---- XML (legacy; deprecated in libhmm v3.4.0, retained for existing files) ----
     m.def("load_hmm",
           [](const std::string &filepath) {
               XMLFileReader reader;
               return reader.read(filepath);
           },
           nb::arg("filepath"),
-          "Load an HMM from an XML file.");
+          "Load an HMM from a legacy XML file. Prefer load_json() for new code.");
     m.def("save_hmm",
           [](const Hmm &hmm_model, const std::string &filepath) {
               XMLFileWriter writer;
@@ -593,7 +627,7 @@ void bind_io(nb::module_ &m) {
           },
           nb::arg("hmm"),
           nb::arg("filepath"),
-          "Save an HMM to an XML file.");
+          "Save an HMM to a legacy XML file. Prefer save_json() for new code.");
 }
 
 } // namespace

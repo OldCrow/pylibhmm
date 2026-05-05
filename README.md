@@ -7,7 +7,8 @@ Python bindings for [libhmm](https://github.com/OldCrow/libhmm), a modern C++20 
 - Native bindings for `Hmm`, `ForwardBackwardCalculator`, `ViterbiCalculator`, and the trainer classes
 - Bindings for all 15 emission distributions in libhmm
 - NumPy integration for vectors/matrices/observation sequences
-- XML model load/save wrappers via libhmm I/O
+- JSON model I/O (save_json / load_json / to_json / from_json) - recommended
+- Legacy XML model I/O (save_hmm / load_hmm) - retained for existing files
 - Python 3.11+ packaging via `scikit-build-core` + `nanobind`
 
 ## Quick start
@@ -35,6 +36,14 @@ hmm.set_distribution(1, loaded)
 obs = np.array([0, 1, 5, 4, 2], dtype=np.float64)
 fb = pylibhmm.ForwardBackwardCalculator(hmm, obs)
 print(fb.log_probability)
+
+# Save and reload the model (JSON - recommended)
+pylibhmm.save_json(hmm, "model.json")
+hmm2 = pylibhmm.load_json("model.json")
+
+# Or round-trip through a string
+json_str = pylibhmm.to_json(hmm)
+hmm3 = pylibhmm.from_json(json_str)
 ```
 
 ## Build and install
@@ -60,7 +69,7 @@ pytest
 
 ## Dependency strategy
 
-`pylibhmm` prefers a local sibling `../libhmm` source tree if present. If not found, CMake falls back to `FetchContent` for `libhmm` tag `v3.3.0`.
+`pylibhmm` prefers a local sibling `../libhmm` source tree if present. If not found, CMake falls back to `FetchContent` for `libhmm` tag `v3.4.0`.
 
 ## Notes on wheel portability
 

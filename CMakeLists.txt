@@ -35,7 +35,7 @@ else()
     FetchContent_Declare(
         libhmm
         GIT_REPOSITORY https://github.com/OldCrow/libhmm.git
-        GIT_TAG        v3.3.0
+        GIT_TAG        v3.4.0
     )
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(BUILD_TESTS OFF CACHE BOOL "" FORCE)

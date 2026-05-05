@@ -81,6 +81,33 @@ def test_segmental_kmeans_training_runs(simple_hmm):
     simple_hmm.validate()
 
 
+def test_json_roundtrip(simple_hmm):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_path = Path(tmpdir) / "model.json"
+        pylibhmm.save_json(simple_hmm, model_path)
+        assert model_path.exists()
+        assert model_path.stat().st_size > 0
+        loaded = pylibhmm.load_json(model_path)
+    assert loaded.num_states == simple_hmm.num_states
+
+
+def test_json_roundtrip_preserves_pi(simple_hmm):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "model.json"
+        pylibhmm.save_json(simple_hmm, path)
+        loaded = pylibhmm.load_json(path)
+    np.testing.assert_allclose(loaded.get_pi(), simple_hmm.get_pi(), rtol=1e-10)
+
+
+def test_to_from_json_roundtrip(simple_hmm):
+    json_str = pylibhmm.to_json(simple_hmm)
+    assert isinstance(json_str, str)
+    assert "states" in json_str
+    loaded = pylibhmm.from_json(json_str)
+    assert loaded.num_states == simple_hmm.num_states
+    np.testing.assert_allclose(loaded.get_pi(), simple_hmm.get_pi(), rtol=1e-10)
+
+
 def test_xml_roundtrip(simple_hmm):
     with tempfile.TemporaryDirectory() as tmpdir:
         model_path = Path(tmpdir) / "model.xml"

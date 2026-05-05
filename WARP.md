@@ -50,7 +50,7 @@ python -c "import platform, struct; print(platform.system(), platform.machine(),
 
 ### macOS (non-Catalina)
 
-- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.3.0`.
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.4.0`.
 - Ensure the active Python and `libhmm` build target the same architecture.
 
 ```bash
