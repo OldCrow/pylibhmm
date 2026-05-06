@@ -33,7 +33,7 @@ from typing import Iterable
 
 import numpy as np
 
-from . import _core
+from . import _core  # pylint: disable=import-self
 
 
 def _as_f64_1d(values, name: str) -> np.ndarray:
