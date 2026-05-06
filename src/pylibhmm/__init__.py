@@ -32,7 +32,7 @@ from typing import Iterable
 
 import numpy as np
 
-from pylibhmm import _core
+from . import _core
 
 
 def _as_f64_1d(values, name: str) -> np.ndarray:
