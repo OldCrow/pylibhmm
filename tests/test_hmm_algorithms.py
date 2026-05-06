@@ -1,8 +1,8 @@
 """Tests for HMM algorithm, calculator, and trainer bindings."""
-import numpy as np
 from pathlib import Path
 import tempfile
 
+import numpy as np
 import pytest
 
 import pylibhmm
