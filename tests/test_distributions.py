@@ -283,3 +283,90 @@ class TestChiSquared:
             pylibhmm.ChiSquared(k=0.0)
         with pytest.raises(Exception):
             pylibhmm.ChiSquared(k=-1.0)
+
+
+# ---------------------------------------------------------------------------
+# VonMises
+# ---------------------------------------------------------------------------
+class TestVonMises:
+    def test_default_params(self):
+        d = pylibhmm.VonMises()
+        assert d.mu == pytest.approx(0.0)
+        assert d.kappa == pytest.approx(1.0)
+        assert not d.is_discrete
+
+    def test_custom_params(self):
+        d = pylibhmm.VonMises(mu=1.5, kappa=2.0)
+        assert d.mu == pytest.approx(1.5)
+        assert d.kappa == pytest.approx(2.0)
+
+    def test_pdf_at_mean(self):
+        # PDF is maximised at x == mu
+        import math
+        d = pylibhmm.VonMises(mu=0.0, kappa=2.0)
+        peak = d.pdf(0.0)
+        assert peak > d.pdf(1.0)
+        assert peak > d.pdf(-1.0)
+
+    def test_batch_log_pdf(self):
+        d = pylibhmm.VonMises(mu=0.0, kappa=1.0)
+        x = np.linspace(-math.pi, math.pi, 9, dtype=np.float64)
+        result = d.log_pdf(x)
+        assert result.shape == (9,)
+        assert np.isfinite(result).all()
+        # symmetry around mu=0
+        np.testing.assert_allclose(result[0], result[-1], rtol=1e-6)
+
+    def test_cdf_at_mean(self):
+        # CDF(mu) should be 0.5 by symmetry
+        d = pylibhmm.VonMises(mu=0.0, kappa=1.0)
+        assert d.cdf(0.0) == pytest.approx(0.5, abs=1e-3)
+
+    def test_mean_and_circular_variance(self):
+        d = pylibhmm.VonMises(mu=1.0, kappa=3.0)
+        assert d.mean == pytest.approx(1.0)
+        # circular_variance in (0, 1); decreases as kappa increases
+        cv = d.circular_variance
+        assert 0.0 < cv < 1.0
+        # kappa=0 -> uniform -> circular_variance=1
+        d0 = pylibhmm.VonMises(mu=0.0, kappa=0.0)
+        assert d0.circular_variance == pytest.approx(1.0, abs=1e-6)
+
+    def test_variance_property(self):
+        # variance is an alias for circular_variance
+        d = pylibhmm.VonMises(mu=0.0, kappa=2.0)
+        assert d.variance == pytest.approx(d.circular_variance)
+
+    def test_fit_unweighted(self):
+        import math
+        rng = np.random.default_rng(42)
+        # Concentrated around pi/2
+        angles = rng.vonmises(math.pi / 2, 3.0, size=500)
+        d = pylibhmm.VonMises()
+        d.fit(angles.astype(np.float64))
+        # mu should be near pi/2
+        assert d.mu == pytest.approx(math.pi / 2, abs=0.15)
+        assert d.kappa > 0.5
+
+    def test_fit_weighted(self):
+        import math
+        data = np.array([0.0, math.pi, math.pi], dtype=np.float64)
+        weights = np.array([0.01, 1.0, 1.0], dtype=np.float64)
+        d = pylibhmm.VonMises()
+        d.fit_weighted(data, weights)
+        # mu should be near pi
+        assert abs(d.mu) == pytest.approx(math.pi, abs=0.3)
+
+    def test_reset(self):
+        d = pylibhmm.VonMises(mu=1.0, kappa=5.0)
+        d.reset()
+        assert d.mu == pytest.approx(0.0)
+        assert d.kappa == pytest.approx(1.0)
+
+    def test_invalid_kappa(self):
+        with pytest.raises(Exception):
+            pylibhmm.VonMises(kappa=-1.0)
+
+    def test_repr(self):
+        d = pylibhmm.VonMises(mu=0.0, kappa=1.0)
+        assert "Von Mises" in repr(d) or "VonMises" in repr(d)

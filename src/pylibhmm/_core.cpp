@@ -66,12 +66,15 @@
 #include <libhmm/distributions/rayleigh_distribution.h>
 #include <libhmm/distributions/student_t_distribution.h>
 #include <libhmm/distributions/uniform_distribution.h>
+#include <libhmm/distributions/von_mises_distribution.h>
 #include <libhmm/distributions/weibull_distribution.h>
 #include <libhmm/hmm.h>
 #include <libhmm/io/hmm_json.h>
 #include <libhmm/io/xml_file_reader.h>
 #include <libhmm/io/xml_file_writer.h>
 #include <libhmm/training/baum_welch_trainer.h>
+#include <libhmm/training/map_baum_welch_trainer.h>
+#include <libhmm/training/model_selection.h>
 #include <libhmm/training/segmental_kmeans_trainer.h>
 #include <libhmm/training/viterbi_trainer.h>
 
@@ -243,6 +246,7 @@ const std::unordered_map<std::type_index, CloneFn> &clone_registry() {
         {typeid(RayleighDistribution),         make_clone<RayleighDistribution>()},
         {typeid(StudentTDistribution),         make_clone<StudentTDistribution>()},
         {typeid(UniformDistribution),          make_clone<UniformDistribution>()},
+        {typeid(VonMisesDistribution),         make_clone<VonMisesDistribution>()},
         {typeid(WeibullDistribution),          make_clone<WeibullDistribution>()},
     };
     return reg;
@@ -385,6 +389,19 @@ void bind_distributions(nb::module_ &m) {
                      &ChiSquaredDistribution::getDegreesOfFreedom,
                      &ChiSquaredDistribution::setDegreesOfFreedom);
     bind_distribution_common<ChiSquaredDistribution>(chi_squared);
+
+    auto von_mises = nb::class_<VonMisesDistribution, EmissionDistribution>(
+        m, "VonMises",
+        "Von Mises circular distribution.\n\n"
+        "The canonical emission for angular observations (turning angles, wind "
+        "directions).  mu is the mean direction in radians; kappa >= 0 is the "
+        "concentration parameter (0 = uniform, inf = point mass at mu).");
+    von_mises
+        .def(nb::init<double, double>(), nb::arg("mu") = 0.0, nb::arg("kappa") = 1.0)
+        .def_prop_rw("mu", &VonMisesDistribution::getMu, &VonMisesDistribution::setMu)
+        .def_prop_rw("kappa", &VonMisesDistribution::getKappa, &VonMisesDistribution::setKappa)
+        .def_prop_ro("circular_variance", &VonMisesDistribution::getCircularVariance);
+    bind_distribution_common<VonMisesDistribution>(von_mises);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,7 +499,19 @@ void bind_calculators(nb::module_ &m) {
              [](const ForwardBackwardCalculator &calc) -> nb::object {
                  return matrix_to_numpy(calc.getLogBackwardVariables());
              })
-        .def_prop_ro("num_states", &ForwardBackwardCalculator::getNumStates);
+        .def_prop_ro("num_states", &ForwardBackwardCalculator::getNumStates)
+        .def("decode_posterior",
+             [](ForwardBackwardCalculator &calc) -> nb::object {
+                 StateSequence seq;
+                 {
+                     nb::gil_scoped_release release;
+                     seq = calc.decodePosterior();
+                 }
+                 return state_sequence_to_numpy(seq);
+             },
+             "Per-step argmax-\u03b3 decoding: returns the most probable state at each "
+             "time step independently. Minimises per-step state error rate. "
+             "Unlike Viterbi, the result is not guaranteed to be a valid path.");
 
     nb::class_<ViterbiCalculator>(m, "ViterbiCalculator")
         .def(
@@ -566,6 +595,30 @@ void bind_trainers(nb::module_ &m) {
         .def_prop_ro("last_log_probability", &ViterbiTrainer::getLastLogProbability)
         .def_prop_rw("config", &ViterbiTrainer::getConfig, &ViterbiTrainer::setConfig);
 
+    nb::class_<MapBaumWelchTrainer>(m, "MapBaumWelchTrainer")
+        .def(
+            "__init__",
+            [](MapBaumWelchTrainer *self, Hmm &h, const nb::list &sequences,
+               double pseudo_count) {
+                auto obs = observation_lists_from_python(sequences);
+                new (self) MapBaumWelchTrainer(h, obs, pseudo_count);
+            },
+            nb::arg("hmm"),
+            nb::arg("sequences"),
+            nb::arg("pseudo_count") = 1.0,
+            nb::keep_alive<1, 2>())
+        .def("train",
+             [](MapBaumWelchTrainer &trainer) {
+                 nb::gil_scoped_release release;
+                 trainer.train();
+             })
+        .def_prop_rw("pseudo_count",
+                     &MapBaumWelchTrainer::getPseudoCount,
+                     &MapBaumWelchTrainer::setPseudoCount)
+        .def("compute_log_prior", &MapBaumWelchTrainer::computeLogPrior,
+             "Unnormalised log-prior log P(\u03bb | c). "
+             "Add to getLogProbability() for the correct MAP convergence criterion.");
+
     nb::class_<SegmentalKMeansTrainer>(m, "SegmentalKMeansTrainer")
         .def(
             "__init__",
@@ -616,18 +669,59 @@ void bind_io(nb::module_ &m) {
     m.def("load_hmm",
           [](const std::string &filepath) {
               XMLFileReader reader;
-              return reader.read(filepath);
+              return reader.read(std::filesystem::path{filepath});
           },
           nb::arg("filepath"),
           "Load an HMM from a legacy XML file. Prefer load_json() for new code.");
     m.def("save_hmm",
           [](const Hmm &hmm_model, const std::string &filepath) {
               XMLFileWriter writer;
-              writer.write(hmm_model, filepath);
+              writer.write(hmm_model, std::filesystem::path{filepath});
           },
           nb::arg("hmm"),
           nb::arg("filepath"),
           "Save an HMM to a legacy XML file. Prefer save_json() for new code.");
+}
+
+// ---------------------------------------------------------------------------
+// bind_model_selection — AIC, BIC, AICc, and parameter counting.
+// ---------------------------------------------------------------------------
+void bind_model_selection(nb::module_ &m) {
+    m.def("count_free_parameters",
+          [](const Hmm &hmm) { return libhmm::count_free_parameters(hmm); },
+          nb::arg("hmm"),
+          "Count the free parameters of a fitted HMM: N(N\u22121) transitions + (N\u22121) initial "
+          "+ \u03a3 emission params.");
+    m.def("compute_aic",
+          [](double logL, std::size_t k) { return libhmm::compute_aic(logL, k); },
+          nb::arg("log_likelihood"),
+          nb::arg("k"),
+          "AIC = 2k \u2212 2 logL (lower is better).");
+    m.def("compute_bic",
+          [](double logL, std::size_t k, std::size_t n) {
+              return libhmm::compute_bic(logL, k, n);
+          },
+          nb::arg("log_likelihood"),
+          nb::arg("k"),
+          nb::arg("n"),
+          "BIC = k ln(n) \u2212 2 logL (lower is better).");
+    m.def("compute_aicc",
+          [](double logL, std::size_t k, std::size_t n) {
+              return libhmm::compute_aicc(logL, k, n);
+          },
+          nb::arg("log_likelihood"),
+          nb::arg("k"),
+          nb::arg("n"),
+          "AICc = AIC + 2k(k+1)/(n\u2212k\u22121) (corrected AIC; lower is better).");
+    m.def("evaluate_model",
+          [](const Hmm &hmm, double logL, std::size_t n) -> nb::tuple {
+              const auto c = libhmm::evaluate_model(hmm, logL, n);
+              return nb::make_tuple(c.aic, c.bic, c.aicc);
+          },
+          nb::arg("hmm"),
+          nb::arg("log_likelihood"),
+          nb::arg("sequence_length"),
+          "Convenience wrapper: returns (aic, bic, aicc) for the fitted HMM.");
 }
 
 } // namespace
@@ -639,4 +733,5 @@ NB_MODULE(_core, m) {
     bind_calculators(m);
     bind_trainers(m);
     bind_io(m);
+    bind_model_selection(m);
 }

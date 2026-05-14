@@ -141,3 +141,141 @@ def test_training_config_fields():
 def test_empty_sequences_raises(simple_hmm):
     with pytest.raises(Exception):
         pylibhmm.BaumWelchTrainer(simple_hmm, [])
+
+
+# ---------------------------------------------------------------------------
+# decode_posterior
+# ---------------------------------------------------------------------------
+def test_decode_posterior_shape(simple_hmm):
+    obs = np.array([0, 1, 5, 4, 2, 3], dtype=np.float64)
+    calc = pylibhmm.ForwardBackwardCalculator(simple_hmm, obs)
+    posterior = calc.decode_posterior()
+    assert posterior.shape == (obs.shape[0],)
+    assert posterior.dtype == np.int64
+
+
+def test_decode_posterior_valid_states(simple_hmm):
+    obs = np.array([0, 1, 5, 5, 5, 0, 1, 2], dtype=np.float64)
+    calc = pylibhmm.ForwardBackwardCalculator(simple_hmm, obs)
+    posterior = calc.decode_posterior()
+    assert set(posterior.tolist()).issubset({0, 1})
+
+
+def test_decode_posterior_vs_viterbi_same_length(simple_hmm):
+    obs = np.array([0, 1, 5, 4, 5, 0], dtype=np.float64)
+    fb = pylibhmm.ForwardBackwardCalculator(simple_hmm, obs)
+    vt = pylibhmm.ViterbiCalculator(simple_hmm, obs)
+    posterior = fb.decode_posterior()
+    viterbi = vt.decode()
+    assert posterior.shape == viterbi.shape
+
+
+# ---------------------------------------------------------------------------
+# MapBaumWelchTrainer
+# ---------------------------------------------------------------------------
+def test_map_baum_welch_runs(simple_hmm):
+    sequences = [
+        np.array([0, 1, 5, 4, 3, 5], dtype=np.float64),
+        np.array([5, 5, 4, 5, 0, 1], dtype=np.float64),
+    ]
+    trainer = pylibhmm.MapBaumWelchTrainer(simple_hmm, sequences, pseudo_count=1.0)
+    trainer.train()
+    simple_hmm.validate()
+
+
+def test_map_baum_welch_default_pseudo_count(simple_hmm):
+    sequences = [np.array([0, 1, 2, 3, 4, 5], dtype=np.float64)]
+    trainer = pylibhmm.MapBaumWelchTrainer(simple_hmm, sequences)
+    assert trainer.pseudo_count == pytest.approx(1.0)
+
+
+def test_map_baum_welch_pseudo_count_setter(simple_hmm):
+    sequences = [np.array([0, 1, 2, 3, 4, 5], dtype=np.float64)]
+    trainer = pylibhmm.MapBaumWelchTrainer(simple_hmm, sequences, pseudo_count=2.0)
+    assert trainer.pseudo_count == pytest.approx(2.0)
+    trainer.pseudo_count = 0.5
+    assert trainer.pseudo_count == pytest.approx(0.5)
+
+
+def test_map_baum_welch_compute_log_prior(simple_hmm):
+    sequences = [np.array([0, 1, 2, 3, 4, 5], dtype=np.float64)]
+    trainer = pylibhmm.MapBaumWelchTrainer(simple_hmm, sequences, pseudo_count=1.0)
+    lp = trainer.compute_log_prior()
+    assert np.isfinite(lp)
+
+
+def test_map_baum_welch_zero_pseudo_count_matches_mle(simple_hmm):
+    # c=0 must not raise; it recovers standard Baum-Welch
+    sequences = [
+        np.array([0, 1, 5, 4, 3, 5], dtype=np.float64),
+        np.array([5, 5, 4, 5, 0, 1], dtype=np.float64),
+    ]
+    trainer = pylibhmm.MapBaumWelchTrainer(simple_hmm, sequences, pseudo_count=0.0)
+    trainer.train()
+    simple_hmm.validate()
+
+
+def test_map_baum_welch_empty_sequences_raises(simple_hmm):
+    with pytest.raises(Exception):
+        pylibhmm.MapBaumWelchTrainer(simple_hmm, [])
+
+
+# ---------------------------------------------------------------------------
+# Model selection
+# ---------------------------------------------------------------------------
+def test_count_free_parameters(simple_hmm):
+    # 2-state discrete-emission HMM:
+    # transitions: 2*(2-1)=2, initial: (2-1)=1
+    # each Discrete(6) has 5 free params (6-1 probabilities) x 2 states = 10
+    # total: 2 + 1 + 10 = 13
+    k = pylibhmm.count_free_parameters(simple_hmm)
+    assert k == 13
+
+
+def test_compute_aic():
+    logL = -100.0
+    k = 5
+    aic = pylibhmm.compute_aic(logL, k)
+    assert aic == pytest.approx(2 * k - 2 * logL)
+
+
+def test_compute_bic():
+    logL = -100.0
+    k = 5
+    n = 200
+    import math
+    bic = pylibhmm.compute_bic(logL, k, n)
+    assert bic == pytest.approx(k * math.log(n) - 2 * logL)
+
+
+def test_compute_aicc():
+    logL = -100.0
+    k = 5
+    n = 200
+    aic = pylibhmm.compute_aic(logL, k)
+    aicc = pylibhmm.compute_aicc(logL, k, n)
+    # AICc = AIC + 2k(k+1)/(n-k-1)
+    correction = 2 * k * (k + 1) / (n - k - 1)
+    assert aicc == pytest.approx(aic + correction)
+
+
+def test_evaluate_model_returns_model_criteria(simple_hmm):
+    # k=13 free params; need n > k+1=14 for AICc to be finite.
+    obs = np.array([0, 1, 5, 4, 2, 3] * 10, dtype=np.float64)  # n=60
+    calc = pylibhmm.ForwardBackwardCalculator(simple_hmm, obs)
+    mc = pylibhmm.evaluate_model(simple_hmm, calc.log_probability, len(obs))
+    assert isinstance(mc, pylibhmm.ModelCriteria)
+    assert np.isfinite(mc.aic)
+    assert np.isfinite(mc.bic)
+    assert np.isfinite(mc.aicc)
+
+
+def test_evaluate_model_ordering(simple_hmm):
+    # For n >> k, AICc ≈ AIC < BIC (BIC penalises more heavily for large n)
+    obs = np.array([0, 1, 5, 4, 2, 3] * 100, dtype=np.float64)
+    calc = pylibhmm.ForwardBackwardCalculator(simple_hmm, obs)
+    mc = pylibhmm.evaluate_model(simple_hmm, calc.log_probability, len(obs))
+    # AIC < BIC for large n
+    assert mc.aic < mc.bic
+    # AICc converges toward AIC as n grows
+    assert abs(mc.aicc - mc.aic) < abs(mc.bic - mc.aic)

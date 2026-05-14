@@ -29,7 +29,7 @@ Example::
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, NamedTuple
 
 import numpy as np
 
@@ -246,6 +246,28 @@ class ViterbiTrainer(_core.ViterbiTrainer):
         super().__init__(hmm, _as_sequence_list(sequences), config)
 
 
+class MapBaumWelchTrainer(_core.MapBaumWelchTrainer):
+    """MAP-EM Baum-Welch trainer with symmetric Dirichlet priors.
+
+    Each :meth:`train` call executes one MAP-EM iteration. The MAP objective
+    ``log P(O|λ) + log P(λ|c)`` is guaranteed monotone; the likelihood alone
+    is not when ``pseudo_count > 0``. Use :meth:`compute_log_prior` to form
+    the correct convergence criterion.
+
+    Args:
+        hmm: The :class:`Hmm` to train. Mutated in place.
+        sequences: Iterable of 1-D array-like observation sequences.
+        pseudo_count: Dirichlet pseudo-count c ≥ 0. c=0 recovers standard MLE.
+
+    Note:
+        The HMM must outlive this object (nanobind keep-alive enforced
+        at the C++ layer).
+    """
+
+    def __init__(self, hmm: Hmm, sequences, pseudo_count: float = 1.0):
+        super().__init__(hmm, _as_sequence_list(sequences), pseudo_count)
+
+
 class SegmentalKMeansTrainer(_core.SegmentalKMeansTrainer):
     """Segmental K-means trainer with automatic sequence coercion.
 
@@ -265,6 +287,18 @@ class SegmentalKMeansTrainer(_core.SegmentalKMeansTrainer):
 
     def __init__(self, hmm: Hmm, sequences):
         super().__init__(hmm, _as_sequence_list(sequences))
+
+
+class ModelCriteria(NamedTuple):
+    """AIC, BIC, and AICc for a fitted HMM.
+
+    All criteria follow the **lower is better** convention.
+    Returned by :func:`evaluate_model`.
+    """
+
+    aic: float
+    bic: float
+    aicc: float
 
 
 # repr(d) returns the distribution's text representation.
@@ -287,11 +321,59 @@ Weibull = _core.Weibull
 Rayleigh = _core.Rayleigh
 StudentT = _core.StudentT
 ChiSquared = _core.ChiSquared
+VonMises = _core.VonMises
 
 TrainingConfig = _core.TrainingConfig
 training_preset_fast = _core.training_preset_fast
 training_preset_balanced = _core.training_preset_balanced
 training_preset_precise = _core.training_preset_precise
+
+
+def count_free_parameters(hmm: Hmm) -> int:
+    """Count the free parameters of a fitted HMM.
+
+    Free parameters = N(N−1) transitions + (N−1) initial + Σ emission params.
+
+    Args:
+        hmm: A fitted :class:`Hmm` instance.
+
+    Returns:
+        Total free parameter count.
+    """
+    return _core.count_free_parameters(hmm)
+
+
+def compute_aic(log_likelihood: float, k: int) -> float:
+    """AIC = 2k − 2 logL (lower is better)."""
+    return _core.compute_aic(log_likelihood, k)
+
+
+def compute_bic(log_likelihood: float, k: int, n: int) -> float:
+    """BIC = k ln(n) − 2 logL (lower is better)."""
+    return _core.compute_bic(log_likelihood, k, n)
+
+
+def compute_aicc(log_likelihood: float, k: int, n: int) -> float:
+    """AICc = AIC + 2k(k+1)/(n−k−1) (lower is better)."""
+    return _core.compute_aicc(log_likelihood, k, n)
+
+
+def evaluate_model(hmm: Hmm, log_likelihood: float, sequence_length: int) -> ModelCriteria:
+    """Compute AIC, BIC, and AICc for a fitted HMM.
+
+    Convenience wrapper: derives k from :func:`count_free_parameters`, then
+    calls the three individual criterion functions.
+
+    Args:
+        hmm: The fitted :class:`Hmm`.
+        log_likelihood: log P(O | λ) from :class:`ForwardBackwardCalculator`.
+        sequence_length: Number of observations T.
+
+    Returns:
+        :class:`ModelCriteria` with ``aic``, ``bic``, and ``aicc`` fields.
+    """
+    aic, bic, aicc = _core.evaluate_model(hmm, log_likelihood, sequence_length)
+    return ModelCriteria(aic=aic, bic=bic, aicc=aicc)
 
 
 def to_json(hmm: Hmm) -> str:
@@ -398,6 +480,8 @@ __all__ = [
     "Gaussian",
     "Hmm",
     "LogNormal",
+    "MapBaumWelchTrainer",
+    "ModelCriteria",
     "NegativeBinomial",
     "Pareto",
     "Poisson",
@@ -408,7 +492,13 @@ __all__ = [
     "Uniform",
     "ViterbiCalculator",
     "ViterbiTrainer",
+    "VonMises",
     "Weibull",
+    "compute_aic",
+    "compute_aicc",
+    "compute_bic",
+    "count_free_parameters",
+    "evaluate_model",
     "from_json",
     "load_hmm",
     "load_json",
