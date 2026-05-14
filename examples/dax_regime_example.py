@@ -52,8 +52,8 @@ def load_returns(ticker: str, start: str, end: str,
         import yfinance as yf  # type: ignore[import]
         df = yf.download(ticker, start=start, end=end,
                          auto_adjust=True, progress=False)
-        prices = df["Close"].dropna().to_numpy(dtype=np.float64)
-        returns = np.diff(np.log(prices))
+        prices = df["Close"].squeeze().dropna().to_numpy(dtype=np.float64).flatten()
+        returns = np.diff(np.log(prices), axis=0).flatten()
         print(f"Downloaded {ticker} ({start} to {end}) via yfinance: "
               f"{len(returns)} daily log-returns")
         return returns
