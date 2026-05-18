@@ -1,15 +1,17 @@
 # pylibhmm
 
-Python bindings for [libhmm](https://github.com/OldCrow/libhmm), a modern C++20 Hidden Markov Model library with 15 emission distributions, canonical log-space inference, and training algorithms.
+Python bindings for [libhmm](https://github.com/OldCrow/libhmm), a modern C++20 Hidden Markov Model library with 16 emission distributions, canonical log-space inference, and training algorithms.
 
 ## Features
 
-- Native bindings for `Hmm`, `ForwardBackwardCalculator`, `ViterbiCalculator`, and the trainer classes
-- Bindings for all 15 emission distributions in libhmm
-- NumPy integration for vectors/matrices/observation sequences
-- JSON model I/O (save_json / load_json / to_json / from_json) - recommended
-- Legacy XML model I/O (save_hmm / load_hmm) - retained for existing files
+- Bindings for all 16 emission distributions, including `VonMisesDistribution` for circular data
+- `Hmm`, `ForwardBackwardCalculator`, `ViterbiCalculator`, `BaumWelchTrainer`, `MapBaumWelchTrainer`, `ViterbiTrainer`, `SegmentalKMeansTrainer`
+- Posterior decoding (`decode_posterior`) and model selection (AIC / BIC / AICc)
+- NumPy integration for vectors, matrices, and observation sequences
+- JSON model I/O (`save_json` / `load_json` / `to_json` / `from_json`) — recommended
+- Legacy XML model I/O (`save_hmm` / `load_hmm`) — retained for existing files
 - Python 3.11+ packaging via `scikit-build-core` + `nanobind`
+- Real-data examples: DAX regime detection, elk movement, earthquake counts, S&P 500, wind direction
 
 ## Quick start
 
@@ -69,7 +71,7 @@ pytest
 
 ## Dependency strategy
 
-`pylibhmm` prefers a local sibling `../libhmm` source tree if present. If not found, CMake falls back to `FetchContent` for `libhmm` tag `v3.4.0`.
+`pylibhmm` prefers a local sibling `../libhmm` source tree if present. If not found, CMake falls back to `FetchContent` for `libhmm` tag `v3.7.0`.
 
 ## Notes on wheel portability
 
