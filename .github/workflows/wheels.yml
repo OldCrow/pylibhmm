@@ -28,7 +28,7 @@ jobs:
             cibw_archs_macos: arm64
             cibw_archs_linux: ""
           - name: macos-x86_64
-            os: macos-13
+            os: macos-15-intel
             cibw_archs_macos: x86_64
             cibw_archs_linux: ""
           - name: windows
