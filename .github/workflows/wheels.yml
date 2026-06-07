@@ -51,8 +51,9 @@ jobs:
           # macOS: each job builds only its native arch to avoid -march=native
           # cross-compilation issues in libhmm's SIMD detection.
           CIBW_ARCHS_MACOS: ${{ matrix.cibw_archs_macos }}
-          # nanobind uses aligned deallocation, which requires macOS 10.13+
-          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.13"
+          # libhmm uses std::filesystem::path which requires macOS 10.15+
+          # (nanobind's aligned deallocation floor of 10.13 is also satisfied)
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.15"
           # Linux: set per-matrix (x86_64 on x64 runner, aarch64 on native ARM runner)
           CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs_linux }}
           # Windows: x86_64 only
