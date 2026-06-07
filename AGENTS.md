@@ -1,4 +1,4 @@
-# WARP.md
+# AGENTS.md
 
 This file provides guidance to Warp when working in this repository.
 
@@ -50,7 +50,7 @@ python -c "import platform, struct; print(platform.system(), platform.machine(),
 
 ### macOS (non-Catalina)
 
-- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.5.1`.
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.8.0`.
 - Ensure the active Python and `libhmm` build target the same architecture.
 
 ```bash
@@ -60,7 +60,7 @@ python -m pytest tests -v --tb=short
 
 ### macOS Catalina (10.15)
 
-- When `pylibhmm` builds local/fetched `libhmm`, apply `libhmm` Catalina rules from `../libhmm/WARP.md`:
+- When `pylibhmm` builds local/fetched `libhmm`, apply `libhmm` Catalina rules from `../libhmm/AGENTS.md`:
   - use `../libhmm/scripts/configure_catalina.sh build` (run from the `libhmm` repo) for fresh `libhmm` configuration,
   - avoid Homebrew LLVM/libc++ hints on Catalina unless explicit troubleshooting is required.
 - If you must override the guard for troubleshooting only, pass `-Ccmake.define.LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX=ON`.
