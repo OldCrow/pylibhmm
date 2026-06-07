@@ -158,3 +158,40 @@ class TestDiscreteFitting:
         d.fit(data)
         assert d.mode == 1
 
+
+# ---------------------------------------------------------------------------
+# Gamma
+# ---------------------------------------------------------------------------
+class TestGammaFitting:
+    # Gamma MLE requires Newton-Raphson so there is no simple closed-form
+    # parameter to verify against a hardcoded dataset.  Instead we check the
+    # invariants that any correct MLE implementation must satisfy:
+    #
+    #   First moment:  k̂ * θ̂ = sample mean  (always exact at convergence)
+    #   Positivity:    k̂ > 0, θ̂ > 0
+    _data = np.array(
+        [1.2, 3.5, 2.1, 4.8, 0.9, 6.1, 2.7, 3.3, 1.8, 4.5], dtype=np.float64
+    )
+
+    def test_unweighted_mean_preserved(self):
+        """k̂ * θ̂ must equal the sample mean (MLE first-moment condition)."""
+        d = pylibhmm.Gamma()
+        d.fit(self._data)
+        assert d.k * d.theta == pytest.approx(float(np.mean(self._data)), rel=1e-6)
+
+    def test_unweighted_params_positive(self):
+        d = pylibhmm.Gamma()
+        d.fit(self._data)
+        assert d.k > 0.0
+        assert d.theta > 0.0
+
+    def test_weighted_mean_preserved(self):
+        """k̂ * θ̂ must equal the weighted sample mean."""
+        data = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float64)
+        weights = np.array([2.0, 1.0, 3.0, 1.0, 3.0], dtype=np.float64)
+        # weighted mean = (2*1 + 1*2 + 3*3 + 1*4 + 3*5) / 10 = 32/10 = 3.2
+        weighted_mean = float(np.average(data, weights=weights))
+        d = pylibhmm.Gamma()
+        d.fit_weighted(data, weights)
+        assert d.k * d.theta == pytest.approx(weighted_mean, rel=1e-6)
+
