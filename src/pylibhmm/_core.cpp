@@ -44,6 +44,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <random>
 #include <span>
 #include <type_traits>
 #include <typeindex>
@@ -133,6 +134,11 @@ struct has_get_standard_deviation<T,
 
 #endif // !PYLIBHMM_HAS_REQUIRES_EXPR
 
+/// Module-level RNG for no-arg sample() calls. Seeded from std::random_device
+/// at module load. Not thread-safe for concurrent no-arg sample() calls;
+/// pass an explicit seed for reproducible or concurrent use.
+static std::mt19937_64 g_rng{std::random_device{}()}; // NOLINT(cert-msc51-cpp)
+
 template <typename Dist, typename PyClass>
 void bind_distribution_common(PyClass &cls) {
     cls.def("pdf",
@@ -164,6 +170,16 @@ void bind_distribution_common(PyClass &cls) {
              nb::arg("data").noconvert(),
              nb::arg("weights").noconvert(),
              "Fit distribution parameters to weighted data.")
+        .def("sample",
+             [](const Dist &d) -> double { return d.sample(g_rng); },
+             "Draw one sample (non-deterministic; uses the module-level RNG).")
+        .def("sample",
+             [](const Dist &d, uint64_t seed) -> double {
+                 std::mt19937_64 rng{seed};
+                 return d.sample(rng);
+             },
+             nb::arg("seed"),
+             "Draw one sample using the given integer seed (reproducible).")
         .def("reset", &Dist::reset, "Reset distribution parameters to defaults.")
         .def_prop_ro("is_discrete", &Dist::isDiscrete)
         // repr(d) returns the distribution's text representation (toString()).
@@ -270,6 +286,16 @@ void bind_distributions(nb::module_ &m) {
     auto emission = nb::class_<EmissionDistribution>(m, "EmissionDistribution");
     emission.def("pdf", &EmissionDistribution::getProbability, nb::arg("x"))
         .def("log_pdf", &EmissionDistribution::getLogProbability, nb::arg("x"))
+        .def("sample",
+             [](const EmissionDistribution &d) -> double { return d.sample(g_rng); },
+             "Draw one sample (non-deterministic; uses the module-level RNG).")
+        .def("sample",
+             [](const EmissionDistribution &d, uint64_t seed) -> double {
+                 std::mt19937_64 rng{seed};
+                 return d.sample(rng);
+             },
+             nb::arg("seed"),
+             "Draw one sample using the given integer seed (reproducible).")
         .def("reset", &EmissionDistribution::reset)
         .def_prop_ro("is_discrete", &EmissionDistribution::isDiscrete)
         // repr(d) returns the distribution's text representation (toString()).

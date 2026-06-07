@@ -71,6 +71,17 @@ class TestGaussian:
         with pytest.raises(Exception):
             pylibhmm.Gaussian(sigma=-1.0)
 
+    def test_sample_finite(self):
+        d = pylibhmm.Gaussian(mu=3.0, sigma=1.0)
+        x = d.sample()
+        assert isinstance(x, float)
+        assert math.isfinite(x)
+
+    def test_sample_seeded_determinism(self):
+        d = pylibhmm.Gaussian(mu=0.0, sigma=1.0)
+        assert d.sample(42) == d.sample(42)
+        assert d.sample(42) != d.sample(43)
+
 
 # ---------------------------------------------------------------------------
 # Poisson
@@ -92,6 +103,13 @@ class TestPoisson:
             pylibhmm.Poisson(lam=0.0)
         with pytest.raises(Exception):
             pylibhmm.Poisson(lam=-1.0)
+
+    def test_sample_is_nonneg_int(self):
+        d = pylibhmm.Poisson(lam=5.0)
+        x = d.sample(99)
+        assert isinstance(x, float)
+        assert x >= 0.0
+        assert x == math.floor(x)  # integral value
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +171,14 @@ class TestDiscrete:
         d.fit(data)
         assert d.mode == 1
         assert d.get_symbol_probability(1) > d.get_symbol_probability(0)
+
+    def test_sample_valid_symbol(self):
+        d = pylibhmm.Discrete(4)
+        for i in range(4):
+            d.set_probability(i, 0.25)
+        x = d.sample(7)
+        assert isinstance(x, float)
+        assert x in {0.0, 1.0, 2.0, 3.0}
 
     def test_num_symbols_and_discrete(self):
         d = pylibhmm.Discrete(6)
