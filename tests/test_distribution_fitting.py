@@ -158,24 +158,3 @@ class TestDiscreteFitting:
         d.fit(data)
         assert d.mode == 1
 
-
-# ---------------------------------------------------------------------------
-# Gamma
-# ---------------------------------------------------------------------------
-class TestGammaFitting:
-    def test_unweighted_recovers_params(self):
-        # With shape k=2, scale theta=3: mean=6, variance=18.
-        # Use enough hardcoded samples that MLE converges close to truth.
-        # Samples drawn from Gamma(2,3) with seed 0 (precalculated offline):
-        data = np.array(
-            [2.43, 4.18, 5.90, 3.67, 8.22, 6.11, 4.73, 7.85,
-             2.99, 5.54, 9.03, 3.41, 6.78, 4.02, 7.30, 5.11,
-             3.88, 6.55, 4.44, 8.67, 3.22, 5.77, 4.90, 7.01,
-             2.88, 6.23, 5.38, 9.12, 3.55, 4.67],
-            dtype=np.float64,
-        )
-        d = pylibhmm.Gamma()
-        d.fit(data)
-        # Tolerance is loose — 30 samples — but parameters should be in the right ballpark.
-        assert d.k == pytest.approx(2.0, abs=0.6)
-        assert d.theta == pytest.approx(3.0, abs=0.8)

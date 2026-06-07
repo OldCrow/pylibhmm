@@ -23,8 +23,13 @@ jobs:
           - name: linux-aarch64
             os: ubuntu-24.04-arm
             cibw_archs_linux: aarch64
-          - name: macos
+          - name: macos-arm64
             os: macos-latest
+            cibw_archs_macos: arm64
+            cibw_archs_linux: ""
+          - name: macos-x86_64
+            os: macos-13
+            cibw_archs_macos: x86_64
             cibw_archs_linux: ""
           - name: windows
             os: windows-latest
@@ -43,8 +48,9 @@ jobs:
       - name: Build wheels
         run: cibuildwheel --output-dir wheelhouse
         env:
-          # macOS: build universal2 (x86_64 + arm64)
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          # macOS: each job builds only its native arch to avoid -march=native
+          # cross-compilation issues in libhmm's SIMD detection.
+          CIBW_ARCHS_MACOS: ${{ matrix.cibw_archs_macos }}
           # nanobind uses aligned deallocation, which requires macOS 10.13+
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.13"
           # Linux: set per-matrix (x86_64 on x64 runner, aarch64 on native ARM runner)
