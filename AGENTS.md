@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Warp when working in this repository.
+This file provides project-scoped guidance to AI agents and contributors working in this repository.
 
 ## Project purpose
 
@@ -24,7 +24,7 @@ Primary goals:
 
 ## Session Start Baseline Workflow (Required)
 
-At the start of every session, do these steps in order:
+**Requires Python ≥ 3.11.** At the start of every session, do these steps in order:
 
 1. Verify machine architecture (OS + CPU) and Python architecture.
 2. Select the platform-specific build path for this host.
@@ -50,7 +50,7 @@ python -c "import platform, struct; print(platform.system(), platform.machine(),
 
 ### macOS (non-Catalina)
 
-- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.8.0`.
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.8.0` (the last stable v3 release). Local `../libhmm` builds may be on the `feature/v4-multivariate-emissions` branch; v3↔4 source compatibility is preserved via `using` aliases, but the fetched fallback will be v3.
 - Ensure the active Python and `libhmm` build target the same architecture.
 
 ```bash
@@ -60,15 +60,27 @@ python -m pytest tests -v --tb=short
 
 ### macOS Catalina (10.15)
 
-- When `pylibhmm` builds local/fetched `libhmm`, apply `libhmm` Catalina rules from `../libhmm/AGENTS.md`:
-  - use `../libhmm/scripts/configure_catalina.sh build` (run from the `libhmm` repo) for fresh `libhmm` configuration,
-  - avoid Homebrew LLVM/libc++ hints on Catalina unless explicit troubleshooting is required.
-- If you must override the guard for troubleshooting only, pass `-Ccmake.define.LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX=ON`.
+- When `pylibhmm` builds local/fetched `libhmm`, apply the macOS Catalina notes from `../libhmm/AGENTS.md`:
+  - avoid Homebrew LLVM/libc++ on Catalina unless explicit troubleshooting is required; use the system AppleClang toolchain.
+- If you must override the guard for troubleshooting only, pass `-Ccmake.define.LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX=ON`. This flag bypasses the guard that blocks Homebrew libc++ on Catalina due to ABI incompatibility with the 10.15 deployment target; use only when debugging.
+
+### Linux
+
+- Requires GCC ≥ 12 or Clang ≥ 14 for C++20 support.
+- If `libhmm` is not found locally, CMake fetches it automatically at v3.8.0.
+
+```bash
+python -m pip install -e ".[test]" -Ccmake.build-type=Release
+python -m pytest tests -v --tb=short
+```
 
 ### Windows (MSVC)
 
-- Use Visual Studio 2022 x64 generator for reproducible MSVC builds.
-- Keep the architecture check mandatory; `libhmm` SIMD selection and resulting binaries are architecture-dependent.
+> **Windows tool paths vary** by installation method (direct installer, `winget`, `chocolatey`, Microsoft Store, etc.). See libhmm `AGENTS.md` Windows section for the full toolchain activation snippet and path alternatives.
+
+- Visual Studio 2022 (Build Tools or full IDE) is required as the C++ compiler. Install from https://aka.ms/vs/17/release/vs_buildtools.exe, `winget install Microsoft.VisualStudio.2022.BuildTools`, or `choco install visualstudio2022buildtools`.
+- Use the VS 2022 x64 generator for reproducible MSVC builds (`-Ccmake.define.CMAKE_GENERATOR="Visual Studio 17 2022"`).
+- `libhmm` SIMD selection and resulting binaries are architecture-dependent; keep the architecture check mandatory.
 
 ```powershell
 python -m pip install -e ".[test]" `
@@ -80,10 +92,16 @@ python -m pytest tests -v --tb=short
 
 ## Canonical commands
 
+```bash
+# macOS/Linux
+python -m pip install -e ".[test]"   # installs package (editable) + test dependencies
+python -m pytest tests -v --tb=short
+```
+
 ```powershell
-pip install -e ".[test]"
-pytest tests -v --tb=short
-pip install . -v
+# Windows
+python -m pip install -e ".[test]"
+python -m pytest tests -v --tb=short
 ```
 
 ## Editing rules
