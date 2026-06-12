@@ -29,6 +29,16 @@
 ///   (nb::rv_policy::reference_internal) into the HMM's internal storage;
 ///   it must not outlive the Hmm.
 ///
+/// Trainer holders
+///   libhmm v4 BasicTrainer stores observations by const reference_wrapper,
+///   not by value (v4 breaking change).  Python __init__ lambdas would create
+///   local ObservationLists that die when the lambda returns, leaving every
+///   trainer with a dangling obsLists_ref_.  Each trainer is wrapped in a
+///   *Holder struct that owns the data on the heap (unique_ptr — stable
+///   address) and passes *data_ to the inner trainer.  data_ is declared
+///   before trainer_ so C++ member-init order guarantees it is alive when
+///   trainer_ stores std::cref(*data_).
+///
 /// Compiler portability
 ///   PYLIBHMM_HAS_REQUIRES_EXPR selects C++20 requires expressions (preferred)
 ///   vs. C++17 std::void_t detection traits (fallback for Apple Clang 12 /
@@ -50,13 +60,17 @@
 #include <typeindex>
 #include <unordered_map>
 
+#include <libhmm/calculators/basic_forward_backward_calculator.h>
 #include <libhmm/calculators/forward_backward_calculator.h>
 #include <libhmm/calculators/viterbi_calculator.h>
 #include <libhmm/distributions/beta_distribution.h>
 #include <libhmm/distributions/binomial_distribution.h>
 #include <libhmm/distributions/chi_squared_distribution.h>
 #include <libhmm/distributions/discrete_distribution.h>
+#include <libhmm/distributions/diagonal_gaussian_distribution.h>
 #include <libhmm/distributions/emission_distribution.h>
+#include <libhmm/distributions/full_covariance_gaussian_distribution.h>
+#include <libhmm/distributions/independent_components_distribution.h>
 #include <libhmm/distributions/exponential_distribution.h>
 #include <libhmm/distributions/gamma_distribution.h>
 #include <libhmm/distributions/gaussian_distribution.h>
@@ -73,11 +87,30 @@
 #include <libhmm/io/hmm_json.h>
 #include <libhmm/io/xml_file_reader.h>
 #include <libhmm/io/xml_file_writer.h>
+#include <libhmm/training/basic_baum_welch_trainer.h>
 #include <libhmm/training/baum_welch_trainer.h>
+#include <libhmm/training/kmeans_init.h>
 #include <libhmm/training/map_baum_welch_trainer.h>
 #include <libhmm/training/model_selection.h>
 #include <libhmm/training/segmental_kmeans_trainer.h>
 #include <libhmm/training/viterbi_trainer.h>
+
+// =============================================================================
+// Suppress implicit instantiation of all specialisations that have
+// explicit instantiations in libhmm.a (compiled there with specific flags).
+// Without these, _core.cpp generates conflicting implicit instantiations
+// that cause ODR violations -> vtable mismatches -> segfaults on train().
+// =============================================================================
+extern template class libhmm::BasicForwardBackwardCalculator<double>;
+extern template class libhmm::BasicForwardBackwardCalculator<libhmm::ObservationVectorView>;
+extern template class libhmm::BasicViterbiCalculator<double>;
+extern template class libhmm::BasicViterbiCalculator<libhmm::ObservationVectorView>;
+extern template class libhmm::BasicBaumWelchTrainer<double>;
+extern template class libhmm::BasicBaumWelchTrainer<libhmm::ObservationVectorView>;
+extern template class libhmm::BasicMapBaumWelchTrainer<double>;
+extern template class libhmm::BasicMapBaumWelchTrainer<libhmm::ObservationVectorView>;
+extern template class libhmm::BasicViterbiTrainer<double>;
+extern template class libhmm::BasicViterbiTrainer<libhmm::ObservationVectorView>;
 
 #include "_common.h"
 
@@ -278,6 +311,55 @@ clone_distribution(const EmissionDistribution &distribution) {
     }
     return it->second(distribution);
 }
+
+// ---------------------------------------------------------------------------
+// Trainer holders — own observation data on the heap so the trainer's
+// reference_wrapper<const ListType> always points to live storage.
+//
+// Member declaration order matters: data_ before trainer_ so that data_ is
+// fully constructed before trainer_(hmm, *data_) runs.
+// ---------------------------------------------------------------------------
+
+struct BaumWelchHolder {
+    std::unique_ptr<ObservationLists> data_;
+    BaumWelchTrainer                  trainer_;
+    BaumWelchHolder(Hmm& hmm, ObservationLists obs)
+        : data_(std::make_unique<ObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_) {}
+};
+
+struct MapBaumWelchHolder {
+    std::unique_ptr<ObservationLists> data_;
+    MapBaumWelchTrainer               trainer_;
+    MapBaumWelchHolder(Hmm& hmm, ObservationLists obs, double pc = 1.0)
+        : data_(std::make_unique<ObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_, pc) {}
+};
+
+struct ViterbiHolder {
+    std::unique_ptr<ObservationLists> data_;
+    ViterbiTrainer                    trainer_;
+    ViterbiHolder(Hmm& hmm, ObservationLists obs, TrainingConfig cfg = {})
+        : data_(std::make_unique<ObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_, cfg) {}
+};
+
+struct SegmentalKMeansHolder {
+    std::unique_ptr<ObservationLists> data_;
+    SegmentalKMeansTrainer             trainer_;
+    SegmentalKMeansHolder(Hmm& hmm, ObservationLists obs)
+        : data_(std::make_unique<ObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_) {}
+};
+
+using MVBWT = BasicBaumWelchTrainer<ObservationVectorView>;
+struct MVBaumWelchHolder {
+    std::unique_ptr<MultiObservationLists> data_;
+    MVBWT                                  trainer_;
+    MVBaumWelchHolder(HmmMV& hmm, MultiObservationLists obs)
+        : data_(std::make_unique<MultiObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_) {}
+};
 
 // ---------------------------------------------------------------------------
 // bind_distributions — base EmissionDistribution and all concrete subtypes.
@@ -549,13 +631,12 @@ void bind_calculators(nb::module_ &m) {
             nb::arg("observations").noconvert(),
             nb::keep_alive<1, 2>())
         .def("decode",
-             [](ViterbiCalculator &calc) -> nb::object {
-                 StateSequence seq;
-                 {
-                     nb::gil_scoped_release release;
-                     seq = calc.decode();
-                 }
-                 return state_sequence_to_numpy(seq);
+             [](const ViterbiCalculator &calc) -> nb::object {
+                 // The Viterbi pass ran in the constructor while the temp
+                 // ObservationSet was still alive.  Re-calling calc.decode()
+                 // would re-read the now-dangling obsRef_; return the cached
+                 // result via getStateSequence() instead.
+                 return state_sequence_to_numpy(calc.getStateSequence());
              })
         .def_prop_ro("log_probability", &ViterbiCalculator::getLogProbability)
         .def("get_state_sequence",
@@ -580,87 +661,93 @@ void bind_trainers(nb::module_ &m) {
     m.def("training_preset_balanced", []() { return training_presets::balanced(); });
     m.def("training_preset_precise", []() { return training_presets::precise(); });
 
-    // keep_alive<1,2> ensures the HMM outlives the trainer, which holds a
-    // non-owning reference through potentially many training iterations.
-    nb::class_<BaumWelchTrainer>(m, "BaumWelchTrainer")
+    // keep_alive<1,2> ensures the HMM outlives the holder, which in turn keeps
+    // data_ alive; data_ outlives the inner trainer.
+    nb::class_<BaumWelchHolder>(m, "BaumWelchTrainer")
         .def(
             "__init__",
-            [](BaumWelchTrainer *self, Hmm &h, const nb::list &sequences) {
+            [](BaumWelchHolder *self, Hmm &h, const nb::list &sequences) {
                 auto obs = observation_lists_from_python(sequences);
-                new (self) BaumWelchTrainer(h, obs);
+                new (self) BaumWelchHolder(h, std::move(obs));
             },
             nb::arg("hmm"),
             nb::arg("sequences"),
             nb::keep_alive<1, 2>())
         .def("train",
-             // Release the GIL: a full EM iteration can be expensive and
-             // should not block other Python threads for its duration.
-             [](BaumWelchTrainer &trainer) {
+             [](BaumWelchHolder &h) {
                  nb::gil_scoped_release release;
-                 trainer.train();
+                 h.trainer_.train();
              });
 
-    nb::class_<ViterbiTrainer>(m, "ViterbiTrainer")
+    nb::class_<ViterbiHolder>(m, "ViterbiTrainer")
         .def(
             "__init__",
-            [](ViterbiTrainer *self, Hmm &h, const nb::list &sequences, const TrainingConfig &config) {
+            [](ViterbiHolder *self, Hmm &h, const nb::list &sequences,
+               const TrainingConfig &config) {
                 auto obs = observation_lists_from_python(sequences);
-                new (self) ViterbiTrainer(h, obs, config);
+                new (self) ViterbiHolder(h, std::move(obs), config);
             },
             nb::arg("hmm"),
             nb::arg("sequences"),
             nb::arg("config") = TrainingConfig{},
             nb::keep_alive<1, 2>())
         .def("train",
-             [](ViterbiTrainer &trainer) {
+             [](ViterbiHolder &h) {
                  nb::gil_scoped_release release;
-                 trainer.train();
+                 h.trainer_.train();
              })
-        .def_prop_ro("has_converged", &ViterbiTrainer::hasConverged)
-        .def_prop_ro("reached_max_iterations", &ViterbiTrainer::reachedMaxIterations)
-        .def_prop_ro("last_log_probability", &ViterbiTrainer::getLastLogProbability)
-        .def_prop_rw("config", &ViterbiTrainer::getConfig, &ViterbiTrainer::setConfig);
+        .def_prop_ro("has_converged",
+                     [](const ViterbiHolder &h) { return h.trainer_.hasConverged(); })
+        .def_prop_ro("reached_max_iterations",
+                     [](const ViterbiHolder &h) { return h.trainer_.reachedMaxIterations(); })
+        .def_prop_ro("last_log_probability",
+                     [](const ViterbiHolder &h) { return h.trainer_.getLastLogProbability(); })
+        .def_prop_rw("config",
+                     [](const ViterbiHolder &h) { return h.trainer_.getConfig(); },
+                     [](ViterbiHolder &h, const TrainingConfig &c) { h.trainer_.setConfig(c); });
 
-    nb::class_<MapBaumWelchTrainer>(m, "MapBaumWelchTrainer")
+    nb::class_<MapBaumWelchHolder>(m, "MapBaumWelchTrainer")
         .def(
             "__init__",
-            [](MapBaumWelchTrainer *self, Hmm &h, const nb::list &sequences,
+            [](MapBaumWelchHolder *self, Hmm &h, const nb::list &sequences,
                double pseudo_count) {
                 auto obs = observation_lists_from_python(sequences);
-                new (self) MapBaumWelchTrainer(h, obs, pseudo_count);
+                new (self) MapBaumWelchHolder(h, std::move(obs), pseudo_count);
             },
             nb::arg("hmm"),
             nb::arg("sequences"),
             nb::arg("pseudo_count") = 1.0,
             nb::keep_alive<1, 2>())
         .def("train",
-             [](MapBaumWelchTrainer &trainer) {
+             [](MapBaumWelchHolder &h) {
                  nb::gil_scoped_release release;
-                 trainer.train();
+                 h.trainer_.train();
              })
         .def_prop_rw("pseudo_count",
-                     &MapBaumWelchTrainer::getPseudoCount,
-                     &MapBaumWelchTrainer::setPseudoCount)
-        .def("compute_log_prior", &MapBaumWelchTrainer::computeLogPrior,
+                     [](const MapBaumWelchHolder &h) { return h.trainer_.getPseudoCount(); },
+                     [](MapBaumWelchHolder &h, double c) { h.trainer_.setPseudoCount(c); })
+        .def("compute_log_prior",
+             [](const MapBaumWelchHolder &h) { return h.trainer_.computeLogPrior(); },
              "Unnormalised log-prior log P(\u03bb | c). "
              "Add to getLogProbability() for the correct MAP convergence criterion.");
 
-    nb::class_<SegmentalKMeansTrainer>(m, "SegmentalKMeansTrainer")
+    nb::class_<SegmentalKMeansHolder>(m, "SegmentalKMeansTrainer")
         .def(
             "__init__",
-            [](SegmentalKMeansTrainer *self, Hmm &h, const nb::list &sequences) {
+            [](SegmentalKMeansHolder *self, Hmm &h, const nb::list &sequences) {
                 auto obs = observation_lists_from_python(sequences);
-                new (self) SegmentalKMeansTrainer(h, obs);
+                new (self) SegmentalKMeansHolder(h, std::move(obs));
             },
             nb::arg("hmm"),
             nb::arg("sequences"),
             nb::keep_alive<1, 2>())
         .def("train",
-             [](SegmentalKMeansTrainer &trainer) {
+             [](SegmentalKMeansHolder &h) {
                  nb::gil_scoped_release release;
-                 trainer.train();
+                 h.trainer_.train();
              })
-        .def_prop_ro("is_terminated", &SegmentalKMeansTrainer::isTerminated);
+        .def_prop_ro("is_terminated",
+                     [](const SegmentalKMeansHolder &h) { return h.trainer_.isTerminated(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -750,6 +837,377 @@ void bind_model_selection(nb::module_ &m) {
           "Convenience wrapper: returns (aic, bic, aicc) for the fitted HMM.");
 }
 
+// ---------------------------------------------------------------------------
+// MV clone registry and helper.
+// ---------------------------------------------------------------------------
+using MVEmissionDist = BasicEmissionDistribution<ObservationVectorView>;
+using MVCloneFn = std::function<std::unique_ptr<MVEmissionDist>(const MVEmissionDist &)>;
+
+template <typename Dist>
+MVCloneFn make_mv_clone() {
+    return [](const MVEmissionDist &base) -> std::unique_ptr<MVEmissionDist> {
+        return std::make_unique<Dist>(static_cast<const Dist &>(base));
+    };
+}
+
+const std::unordered_map<std::type_index, MVCloneFn> &mv_clone_registry() {
+    static const std::unordered_map<std::type_index, MVCloneFn> reg{
+        {typeid(DiagonalGaussianDistribution),       make_mv_clone<DiagonalGaussianDistribution>()},
+        {typeid(FullCovarianceGaussianDistribution), make_mv_clone<FullCovarianceGaussianDistribution>()},
+        {typeid(IndependentComponentsDistribution),  make_mv_clone<IndependentComponentsDistribution>()},
+    };
+    return reg;
+}
+
+[[nodiscard]] std::unique_ptr<MVEmissionDist>
+clone_mv_distribution(const MVEmissionDist &dist) {
+    const auto it = mv_clone_registry().find(typeid(dist));
+    if (it == mv_clone_registry().end())
+        throw nb::type_error("Unsupported MV EmissionDistribution subtype");
+    return it->second(dist);
+}
+
+// ---------------------------------------------------------------------------
+// bind_mv_distributions
+// ---------------------------------------------------------------------------
+void bind_mv_distributions(nb::module_ &m) {
+    // Shared MV base (not typically instantiated directly from Python)
+    nb::class_<MVEmissionDist>(m, "MVEmissionDistribution");
+
+    // DiagonalGaussianDistribution
+    auto diag = nb::class_<DiagonalGaussianDistribution, MVEmissionDist>(
+        m, "DiagonalGaussian",
+        "Multivariate Gaussian with diagonal covariance (D independent Gaussians).\n\n"
+        "Observation vector must be a 1-D float64 array of length dim for log_pdf,\n"
+        "or a 2-D (N×dim) array for batched log_pdf.");
+    diag.def(nb::init<std::size_t>(), nb::arg("dim"))
+        .def_prop_ro("dim", &DiagonalGaussianDistribution::getDimension)
+        .def_prop_ro("means",
+                     [](const DiagonalGaussianDistribution &d) -> nb::object {
+                         const auto &v = d.getMean();
+                         auto *buf = new double[v.size()];
+                         std::copy(v.begin(), v.end(), buf);
+                         return buf_to_numpy_owned(buf, v.size());
+                     })
+        .def_prop_ro("variances",
+                     [](const DiagonalGaussianDistribution &d) -> nb::object {
+                         const auto &v = d.getVariance();
+                         auto *buf = new double[v.size()];
+                         std::copy(v.begin(), v.end(), buf);
+                         return buf_to_numpy_owned(buf, v.size());
+                     })
+        .def("set_parameters",
+             [](DiagonalGaussianDistribution &d, NpArray1DIn means, NpArray1DIn variances) {
+                 std::vector<double> mu(means.data(), means.data() + means.shape(0));
+                 std::vector<double> var(variances.data(), variances.data() + variances.shape(0));
+                 d.setParameters(std::move(mu), var);
+             },
+             nb::arg("means").noconvert(), nb::arg("variances").noconvert())
+        .def("set_means",
+             [](DiagonalGaussianDistribution &d, NpArray1DIn means) {
+                 std::vector<double> mu(means.data(), means.data() + means.shape(0));
+                 d.setMeans(std::move(mu));
+             }, nb::arg("means").noconvert())
+        .def("set_variances",
+             [](DiagonalGaussianDistribution &d, NpArray1DIn vars) {
+                 std::vector<double> v(vars.data(), vars.data() + vars.shape(0));
+                 d.setVariances(v);
+             }, nb::arg("variances").noconvert())
+        .def("log_pdf",
+             [](const DiagonalGaussianDistribution &d, NpArray1DIn x) -> double {
+                 return d.getLogProbability(ObservationVectorView{x.data(), x.shape(0)});
+             }, nb::arg("x").noconvert(), "Log-pdf for a single D-dim observation.")
+        .def("log_pdf",
+             [](const DiagonalGaussianDistribution &d, NpArray2DIn X) -> nb::object {
+                 const size_t N = X.shape(0), D = X.shape(1);
+                 auto *buf = new double[N];
+                 { nb::gil_scoped_release rel;
+                   for (size_t i = 0; i < N; ++i)
+                       buf[i] = d.getLogProbability(
+                           ObservationVectorView{X.data() + i * D, D}); }
+                 return buf_to_numpy_owned(buf, N);
+             }, nb::arg("X").noconvert(), "Batched log-pdf for a 2-D (N×D) observation array.")
+        .def("fit",
+             [](DiagonalGaussianDistribution &d, NpArray2DIn X) {
+                 auto views = obs_matrix_views(X);
+                 nb::gil_scoped_release rel;
+                 d.fit(std::span<const ObservationVectorView>(views.data(), views.size()));
+             }, nb::arg("X").noconvert())
+        .def("fit_weighted",
+             [](DiagonalGaussianDistribution &d, NpArray2DIn X, NpArray1DIn w) {
+                 auto views = obs_matrix_views(X);
+                 nb::gil_scoped_release rel;
+                 d.fit(std::span<const ObservationVectorView>(views.data(), views.size()),
+                       std::span<const double>(w.data(), w.shape(0)));
+             }, nb::arg("X").noconvert(), nb::arg("weights").noconvert())
+        .def("reset", &DiagonalGaussianDistribution::reset)
+        .def("sample_mv",
+             [](const DiagonalGaussianDistribution &d) -> nb::object {
+                 auto v = d.sample_mv(g_rng);
+                 auto *buf = new double[v.size()];
+                 std::copy(v.begin(), v.end(), buf);
+                 return buf_to_numpy_owned(buf, v.size());
+             })
+        .def("__repr__", [](const DiagonalGaussianDistribution &d){ return d.toString(); });
+
+    // FullCovarianceGaussianDistribution
+    auto full = nb::class_<FullCovarianceGaussianDistribution, MVEmissionDist>(
+        m, "FullCovGaussian",
+        "Multivariate Gaussian with full covariance matrix.\n\n"
+        "Observation vector must be a 1-D float64 array of length dim for log_pdf,\n"
+        "or a 2-D (N×dim) array for batched log_pdf.");
+    full.def(nb::init<std::size_t>(), nb::arg("dim"))
+        .def_prop_ro("dim", &FullCovarianceGaussianDistribution::getDimension)
+        .def_prop_ro("mean",
+                     [](const FullCovarianceGaussianDistribution &d) -> nb::object {
+                         const auto &v = d.getMean();
+                         auto *buf = new double[v.size()];
+                         std::copy(v.begin(), v.end(), buf);
+                         return buf_to_numpy_owned(buf, v.size());
+                     })
+        .def_prop_ro("covariance",
+                     [](const FullCovarianceGaussianDistribution &d) -> nb::object {
+                         return obs_matrix_to_numpy(d.getCovariance());
+                     })
+        .def("set_mean",
+             [](FullCovarianceGaussianDistribution &d, NpArray1DIn mu) {
+                 std::vector<double> v(mu.data(), mu.data() + mu.shape(0));
+                 d.setMean(std::move(v));
+             }, nb::arg("mean").noconvert())
+        .def("set_covariance",
+             [](FullCovarianceGaussianDistribution &d, NpArray2DIn cov) {
+                 d.setCovariance(obs_matrix_from_numpy(cov));
+             }, nb::arg("cov").noconvert())
+        .def("set_parameters",
+             [](FullCovarianceGaussianDistribution &d, NpArray1DIn mu, NpArray2DIn cov) {
+                 std::vector<double> v(mu.data(), mu.data() + mu.shape(0));
+                 d.setParameters(std::move(v), obs_matrix_from_numpy(cov));
+             }, nb::arg("mean").noconvert(), nb::arg("cov").noconvert())
+        .def("log_pdf",
+             [](const FullCovarianceGaussianDistribution &d, NpArray1DIn x) -> double {
+                 return d.getLogProbability(ObservationVectorView{x.data(), x.shape(0)});
+             }, nb::arg("x").noconvert(), "Log-pdf for a single D-dim observation.")
+        .def("log_pdf",
+             [](const FullCovarianceGaussianDistribution &d, NpArray2DIn X) -> nb::object {
+                 const size_t N = X.shape(0), D = X.shape(1);
+                 auto *buf = new double[N];
+                 { nb::gil_scoped_release rel;
+                   for (size_t i = 0; i < N; ++i)
+                       buf[i] = d.getLogProbability(
+                           ObservationVectorView{X.data() + i * D, D}); }
+                 return buf_to_numpy_owned(buf, N);
+             }, nb::arg("X").noconvert(), "Batched log-pdf for a 2-D (N×D) observation array.")
+        .def("fit",
+             [](FullCovarianceGaussianDistribution &d, NpArray2DIn X) {
+                 auto views = obs_matrix_views(X);
+                 nb::gil_scoped_release rel;
+                 d.fit(std::span<const ObservationVectorView>(views.data(), views.size()));
+             }, nb::arg("X").noconvert())
+        .def("fit_weighted",
+             [](FullCovarianceGaussianDistribution &d, NpArray2DIn X, NpArray1DIn w) {
+                 auto views = obs_matrix_views(X);
+                 nb::gil_scoped_release rel;
+                 d.fit(std::span<const ObservationVectorView>(views.data(), views.size()),
+                       std::span<const double>(w.data(), w.shape(0)));
+             }, nb::arg("X").noconvert(), nb::arg("weights").noconvert())
+        .def("reset", &FullCovarianceGaussianDistribution::reset)
+        .def("sample_mv",
+             [](const FullCovarianceGaussianDistribution &d) -> nb::object {
+                 auto v = d.sample_mv(g_rng);
+                 auto *buf = new double[v.size()];
+                 std::copy(v.begin(), v.end(), buf);
+                 return buf_to_numpy_owned(buf, v.size());
+             })
+        .def("__repr__", [](const FullCovarianceGaussianDistribution &d){ return d.toString(); });
+
+    // IndependentComponentsDistribution
+    auto ic = nb::class_<IndependentComponentsDistribution, MVEmissionDist>(
+        m, "IndependentComponents",
+        "MV emission with D independent scalar components.\n\n"
+        "Default construction creates D Gaussian(0,1) components.\n"
+        "Individual components can be any scalar EmissionDistribution.");
+    ic.def(nb::init<std::size_t>(), nb::arg("dim"),
+           "Construct with dim independent Gaussian(0,1) components.")
+      .def("__init__",
+           [](IndependentComponentsDistribution *self, const nb::list &components) {
+               std::vector<std::unique_ptr<EmissionDistribution>> comps;
+               comps.reserve(nb::len(components));
+               for (nb::handle item : components)
+                   comps.push_back(clone_distribution(
+                       nb::cast<const EmissionDistribution &>(item)));
+               new (self) IndependentComponentsDistribution(std::move(comps));
+           },
+           nb::arg("components"),
+           "Construct from a list of scalar EmissionDistribution objects.")
+      .def_prop_ro("dim", &IndependentComponentsDistribution::getDimension)
+      .def("get_component",
+           [](IndependentComponentsDistribution &d, std::size_t i) -> EmissionDistribution & {
+               return d.getComponent(i);
+           }, nb::arg("index"), nb::rv_policy::reference_internal)
+      .def("set_component",
+           [](IndependentComponentsDistribution &d, std::size_t i,
+              const EmissionDistribution &comp) {
+               d.setComponent(i, clone_distribution(comp));
+           }, nb::arg("index"), nb::arg("distribution"))
+      .def("log_pdf",
+           [](const IndependentComponentsDistribution &d, NpArray1DIn x) -> double {
+               return d.getLogProbability(ObservationVectorView{x.data(), x.shape(0)});
+           }, nb::arg("x").noconvert())
+      .def("log_pdf",
+           [](const IndependentComponentsDistribution &d, NpArray2DIn X) -> nb::object {
+               const size_t N = X.shape(0), D = X.shape(1);
+               auto *buf = new double[N];
+               { nb::gil_scoped_release rel;
+                 for (size_t i = 0; i < N; ++i)
+                     buf[i] = d.getLogProbability(
+                         ObservationVectorView{X.data() + i * D, D}); }
+               return buf_to_numpy_owned(buf, N);
+           }, nb::arg("X").noconvert())
+      .def("fit",
+           [](IndependentComponentsDistribution &d, NpArray2DIn X) {
+               auto views = obs_matrix_views(X);
+               nb::gil_scoped_release rel;
+               d.fit(std::span<const ObservationVectorView>(views.data(), views.size()));
+           }, nb::arg("X").noconvert())
+      .def("fit_weighted",
+           [](IndependentComponentsDistribution &d, NpArray2DIn X, NpArray1DIn w) {
+               auto views = obs_matrix_views(X);
+               nb::gil_scoped_release rel;
+               d.fit(std::span<const ObservationVectorView>(views.data(), views.size()),
+                     std::span<const double>(w.data(), w.shape(0)));
+           }, nb::arg("X").noconvert(), nb::arg("weights").noconvert())
+      .def("reset", &IndependentComponentsDistribution::reset)
+      .def("__repr__",
+           [](const IndependentComponentsDistribution &d){ return d.toString(); });
+}
+
+// ---------------------------------------------------------------------------
+// bind_hmm_mv — the multivariate HMM.
+// ---------------------------------------------------------------------------
+void bind_hmm_mv(nb::module_ &m) {
+    auto hmm_mv = nb::class_<HmmMV>(m, "HmmMV",
+        "Multivariate Hidden Markov Model (BasicHmm<ObservationVectorView>).\n\n"
+        "Emission distributions must be MV types (DiagonalGaussian, FullCovGaussian, "
+        "or IndependentComponents).\n"
+        "Observation sequences are 2-D float64 NumPy arrays with shape (T, D).");
+    hmm_mv
+        .def(nb::init<std::size_t>(), nb::arg("num_states"))
+        .def_prop_ro("num_states", &HmmMV::getNumStatesModern)
+        .def("set_pi",
+             [](HmmMV &h, NpArray1DIn pi) {
+                 if (pi.shape(0) != h.getNumStatesModern())
+                     throw nb::value_error("pi length must match num_states");
+                 h.setPi(vector_from_numpy(pi));
+             }, nb::arg("pi").noconvert())
+        .def("get_pi",
+             [](const HmmMV &h) -> nb::object { return vector_to_numpy(h.getPi()); })
+        .def("set_trans",
+             [](HmmMV &h, NpArray2DIn trans) {
+                 const size_t n = h.getNumStatesModern();
+                 if (trans.shape(0) != n || trans.shape(1) != n)
+                     throw nb::value_error("transition matrix must have shape (num_states, num_states)");
+                 h.setTrans(matrix_from_numpy(trans));
+             }, nb::arg("trans").noconvert())
+        .def("get_trans",
+             [](const HmmMV &h) -> nb::object { return matrix_to_numpy(h.getTrans()); })
+        .def("set_distribution",
+             [](HmmMV &h, std::size_t state, const MVEmissionDist &dist) {
+                 h.setDistribution(state, clone_mv_distribution(dist));
+             }, nb::arg("state"), nb::arg("distribution"))
+        .def("get_distribution",
+             [](HmmMV &h, std::size_t state) -> MVEmissionDist & {
+                 return h.getDistribution(state);
+             }, nb::arg("state"), nb::rv_policy::reference_internal)
+        .def("validate", &HmmMV::validate);
+}
+
+// ---------------------------------------------------------------------------
+// bind_mv_calculators
+// ---------------------------------------------------------------------------
+void bind_mv_calculators(nb::module_ &m) {
+    using MVFBC = BasicForwardBackwardCalculator<ObservationVectorView>;
+    nb::class_<MVFBC>(m, "MVForwardBackwardCalculator")
+        .def("__init__",
+             [](MVFBC *self, HmmMV &h, NpArray2DIn observations) {
+                 auto mat = obs_matrix_from_numpy(observations);
+                 new (self) MVFBC(h, std::move(mat));
+             },
+             nb::arg("hmm"), nb::arg("observations").noconvert(),
+             nb::keep_alive<1, 2>())
+        .def_prop_ro("log_probability", &MVFBC::getLogProbability)
+        .def("get_log_forward_variables",
+             [](const MVFBC &calc) -> nb::object {
+                 return matrix_to_numpy(calc.getLogForwardVariables());
+             })
+        .def("get_log_backward_variables",
+             [](const MVFBC &calc) -> nb::object {
+                 return matrix_to_numpy(calc.getLogBackwardVariables());
+             })
+        .def_prop_ro("num_states", &MVFBC::getNumStates);
+}
+
+// ---------------------------------------------------------------------------
+// bind_mv_trainers
+// ---------------------------------------------------------------------------
+void bind_mv_trainers(nb::module_ &m) {
+    nb::class_<MVBaumWelchHolder>(m, "MVBaumWelchTrainer")
+        .def("__init__",
+             [](MVBaumWelchHolder *self, HmmMV &h, const nb::list &sequences) {
+                 auto lists = multi_obs_lists_from_python(sequences);
+                 new (self) MVBaumWelchHolder(h, std::move(lists));
+             },
+             nb::arg("hmm"), nb::arg("sequences"),
+             nb::keep_alive<1, 2>())
+        .def("train",
+             [](MVBaumWelchHolder &h) {
+                 nb::gil_scoped_release release;
+                 h.trainer_.train();
+             });
+
+    m.def("kmeans_init",
+          [](HmmMV &hmm, const nb::list &sequences, uint64_t seed) {
+              auto lists  = multi_obs_lists_from_python(sequences);
+              std::mt19937_64 rng{seed};
+              nb::gil_scoped_release release;
+              libhmm::kmeans_init(hmm, lists, rng);
+          },
+          nb::arg("hmm"),
+          nb::arg("sequences"),
+          nb::arg("seed") = uint64_t{42},
+          "Initialise HmmMV emission distributions via k-means++ on all observations.\n"
+          "sequences: list of 2-D (T×D) float64 NumPy arrays.");
+}
+
+// ---------------------------------------------------------------------------
+// bind_mv_io — MV JSON serialization and model selection.
+// ---------------------------------------------------------------------------
+void bind_mv_io(nb::module_ &m) {
+    m.def("to_json_mv",
+          [](const HmmMV &hmm) { return libhmm::to_json(hmm); },
+          nb::arg("hmm"),
+          "Serialize an MV HMM to a compact JSON string (obs_type=\"multivariate\").");
+    m.def("from_json_mv",
+          [](const std::string &src) { return libhmm::from_json_mv(src); },
+          nb::arg("src"),
+          "Deserialize an MV HMM from a JSON string produced by to_json_mv().");
+    m.def("save_json_mv",
+          [](const HmmMV &hmm, const std::string &filepath) {
+              libhmm::save_json_mv(hmm, std::filesystem::path{filepath});
+          },
+          nb::arg("hmm"), nb::arg("filepath"),
+          "Write an MV HMM as JSON to filepath.");
+    m.def("load_json_mv",
+          [](const std::string &filepath) {
+              return libhmm::load_json_mv(std::filesystem::path{filepath});
+          },
+          nb::arg("filepath"),
+          "Read and deserialize an MV HMM from a JSON file.");
+    m.def("count_free_parameters_mv",
+          [](const HmmMV &hmm) { return libhmm::count_free_parameters(hmm); },
+          nb::arg("hmm"),
+          "Count the free parameters of a fitted MV HMM.");
+}
+
 } // namespace
 
 NB_MODULE(_core, m) {
@@ -760,4 +1218,10 @@ NB_MODULE(_core, m) {
     bind_trainers(m);
     bind_io(m);
     bind_model_selection(m);
+    // v4 multivariate API
+    bind_mv_distributions(m);
+    bind_hmm_mv(m);
+    bind_mv_calculators(m);
+    bind_mv_trainers(m);
+    bind_mv_io(m);
 }
