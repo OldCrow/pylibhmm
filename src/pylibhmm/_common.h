@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <libhmm/common/common.h>
+#include <libhmm/linalg/linalg_types.h>   // ObservationMatrix, MultiObservationLists
 
 namespace nb = nanobind;
 using namespace libhmm;
@@ -123,6 +124,63 @@ inline nb::object matrix_to_numpy(const Matrix &m) {
     return nb::cast(
         nb::ndarray<nb::numpy, double, nb::ndim<2>>(buf, {rows, cols}, owner),
         nb::rv_policy::move);
+}
+
+// =============================================================================
+// Multivariate (v4) conversion helpers
+// =============================================================================
+
+/// Copies a 2-D (T×D) row-major float64 NumPy array into a libhmm ObservationMatrix.
+inline ObservationMatrix obs_matrix_from_numpy(NpArray2DIn X) {
+    const size_t T = X.shape(0);
+    const size_t D = X.shape(1);
+    ObservationMatrix mat(T, D);
+    const double *src = X.data();
+    for (size_t t = 0; t < T; ++t)
+        for (size_t d = 0; d < D; ++d)
+            mat(t, d) = src[t * D + d];
+    return mat;
+}
+
+/// Copies a libhmm ObservationMatrix into a new owned 2-D (T×D) float64 NumPy array.
+inline nb::object obs_matrix_to_numpy(const ObservationMatrix &mat) {
+    const size_t T = mat.size1();
+    const size_t D = mat.size2();
+    auto *buf = new double[T * D];
+    for (size_t t = 0; t < T; ++t)
+        for (size_t d = 0; d < D; ++d)
+            buf[t * D + d] = mat(t, d);
+    nb::capsule owner(buf, [](void *p) noexcept { delete[] static_cast<double *>(p); });
+    return nb::cast(
+        nb::ndarray<nb::numpy, double, nb::ndim<2>>(buf, {T, D}, owner),
+        nb::rv_policy::move);
+}
+
+/// Builds a vector of non-owning ObservationVectorView row spans from a 2-D (T×D)
+/// array.  The array's data buffer must remain valid for the lifetime of the views.
+inline std::vector<ObservationVectorView>
+obs_matrix_views(NpArray2DIn X) {
+    const size_t T = X.shape(0);
+    const size_t D = X.shape(1);
+    std::vector<ObservationVectorView> views;
+    views.reserve(T);
+    const double *ptr = X.data();
+    for (size_t t = 0; t < T; ++t)
+        views.emplace_back(ptr + t * D, D);
+    return views;
+}
+
+/// Converts a Python list of 2-D (T_i×D) float64 NumPy arrays into a MultiObservationLists.
+/// Each element must be a C-contiguous 2-D float64 array with the same number of columns.
+inline MultiObservationLists
+multi_obs_lists_from_python(const nb::list &sequences) {
+    MultiObservationLists out;
+    out.reserve(nb::len(sequences));
+    for (nb::handle item : sequences) {
+        auto arr = nb::cast<NpArray2DIn>(item);
+        out.push_back(obs_matrix_from_numpy(arr));
+    }
+    return out;
 }
 
 /// Calls Dist::getBatchLogProbabilities() with the GIL released and returns the result as a NumPy array.

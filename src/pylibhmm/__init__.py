@@ -467,7 +467,150 @@ def save_hmm(hmm: Hmm, filepath: str | Path) -> None:
     _core.save_hmm(hmm, str(filepath))
 
 
+# =============================================================================
+# v4 Multivariate API
+# =============================================================================
+
+# Re-export MV distribution types directly from the extension.
+MVEmissionDistribution = _core.MVEmissionDistribution
+DiagonalGaussian       = _core.DiagonalGaussian
+FullCovGaussian        = _core.FullCovGaussian
+IndependentComponents  = _core.IndependentComponents
+
+
+def _as_mv_sequence_list(sequences) -> list[np.ndarray]:
+    """Validate and coerce each element of *sequences* to a 2-D (T×D) float64 array.
+
+    Args:
+        sequences: Iterable of array-like multivariate observation sequences.
+            Each element must be convertible to shape (T_i, D) with T_i > 0.
+
+    Returns:
+        List of C-contiguous float64 2-D arrays.
+
+    Raises:
+        ValueError: If *sequences* is empty or any element fails validation.
+    """
+    converted: list[np.ndarray] = []
+    for i, seq in enumerate(sequences):
+        arr = np.asarray(seq, dtype=np.float64)
+        if arr.ndim != 2:
+            raise ValueError(f"sequences[{i}] must be a 2-D array (T, D)")
+        if arr.shape[0] == 0:
+            raise ValueError(f"sequences[{i}] must contain at least one observation")
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"sequences[{i}] must contain only finite values")
+        converted.append(np.ascontiguousarray(arr))
+    if not converted:
+        raise ValueError("sequences must contain at least one observation sequence")
+    return converted
+
+
+class HmmMV(_core.HmmMV):
+    """Multivariate Hidden Markov Model with Python-level input validation.
+
+    Wraps :class:`pylibhmm._core.HmmMV`.  Emission distributions must be
+    multivariate types (:class:`DiagonalGaussian`, :class:`FullCovGaussian`,
+    or :class:`IndependentComponents`).
+    Observation sequences are 2-D float64 NumPy arrays with shape ``(T, D)``.
+
+    Args:
+        num_states: Number of hidden states.  Must be > 0.
+    """
+
+    def __init__(self, num_states: int):
+        if num_states <= 0:
+            raise ValueError("num_states must be greater than 0")
+        super().__init__(num_states)
+
+    def set_pi(self, pi) -> None:
+        arr = _as_f64_1d(pi, "pi")
+        if arr.shape[0] != self.num_states:
+            raise ValueError("pi length must match num_states")
+        super().set_pi(arr)
+
+    def set_trans(self, trans) -> None:
+        arr = _as_f64_2d(trans, "trans")
+        expected = (self.num_states, self.num_states)
+        if arr.shape != expected:
+            raise ValueError(f"trans must have shape {expected}")
+        super().set_trans(arr)
+
+
+class MVForwardBackwardCalculator(_core.MVForwardBackwardCalculator):
+    """Multivariate forward-backward calculator with automatic array coercion.
+
+    Args:
+        hmm: A :class:`HmmMV` instance.
+        observations: 2-D array-like of shape ``(T, D)``.
+    """
+
+    def __init__(self, hmm: HmmMV, observations):
+        obs = np.ascontiguousarray(np.asarray(observations, dtype=np.float64))
+        if obs.ndim != 2:
+            raise ValueError("observations must be a 2-D array (T, D)")
+        super().__init__(hmm, obs)
+
+
+class MVBaumWelchTrainer(_core.MVBaumWelchTrainer):
+    """Multivariate Baum-Welch (EM) trainer with automatic sequence coercion.
+
+    Args:
+        hmm: The :class:`HmmMV` to train.  Mutated in place by :meth:`train`.
+        sequences: Iterable of 2-D array-like sequences, each shape ``(T_i, D)``.
+    """
+
+    def __init__(self, hmm: HmmMV, sequences):
+        super().__init__(hmm, _as_mv_sequence_list(sequences))
+
+
+def kmeans_init(hmm: HmmMV, sequences, seed: int = 42) -> None:
+    """Initialise a multivariate HMM's emission distributions via k-means++.
+
+    Runs Lloyd's algorithm with k-means++ seeding on all observation vectors.
+    Each state's emission distribution is fitted to its assigned cluster members.
+    Call before :class:`MVBaumWelchTrainer` to provide a data-driven start.
+
+    Args:
+        hmm: The :class:`HmmMV` to initialise.  Emission distributions are
+            updated in place.
+        sequences: Iterable of 2-D array-like sequences, each shape ``(T_i, D)``.
+        seed: Integer RNG seed for reproducible k-means++ seeding (default 42).
+    """
+    _core.kmeans_init(hmm, _as_mv_sequence_list(sequences), int(seed))
+
+
+def to_json_mv(hmm: HmmMV) -> str:
+    """Serialize a multivariate HMM to a JSON string.
+
+    The JSON schema includes ``\"obs_type\": \"multivariate\"`` so it is
+    rejected by the scalar :func:`from_json`.
+    """
+    return _core.to_json_mv(hmm)
+
+
+def from_json_mv(src: str) -> HmmMV:
+    """Deserialize a multivariate HMM from a JSON string."""
+    return _core.from_json_mv(src)
+
+
+def save_json_mv(hmm: HmmMV, filepath: str | Path) -> None:
+    """Write a multivariate HMM as JSON to *filepath*."""
+    _core.save_json_mv(hmm, str(filepath))
+
+
+def load_json_mv(filepath: str | Path) -> HmmMV:
+    """Read and deserialize a multivariate HMM from a JSON file."""
+    return _core.load_json_mv(str(filepath))
+
+
+def count_free_parameters_mv(hmm: HmmMV) -> int:
+    """Count the free parameters of a fitted multivariate HMM."""
+    return _core.count_free_parameters_mv(hmm)
+
+
 __all__ = [
+    # Scalar API (v3 compatible)
     "BaumWelchTrainer",
     "Beta",
     "Binomial",
@@ -508,4 +651,18 @@ __all__ = [
     "training_preset_balanced",
     "training_preset_fast",
     "training_preset_precise",
+    # Multivariate API (v4)
+    "DiagonalGaussian",
+    "FullCovGaussian",
+    "HmmMV",
+    "IndependentComponents",
+    "MVBaumWelchTrainer",
+    "MVEmissionDistribution",
+    "MVForwardBackwardCalculator",
+    "count_free_parameters_mv",
+    "from_json_mv",
+    "kmeans_init",
+    "load_json_mv",
+    "save_json_mv",
+    "to_json_mv",
 ]
