@@ -50,7 +50,7 @@ python -c "import platform, struct; print(platform.system(), platform.machine(),
 
 ### macOS (non-Catalina)
 
-- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v3.8.0` (the last stable v3 release). Local `../libhmm` builds may be on the `feature/v4-multivariate-emissions` branch; v3↔4 source compatibility is preserved via `using` aliases, but the fetched fallback will be v3.
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v4.0.4` via FetchContent.
 - Ensure the active Python and `libhmm` build target the same architecture.
 
 ```bash
@@ -67,7 +67,7 @@ python -m pytest tests -v --tb=short
 ### Linux
 
 - Requires GCC ≥ 12 or Clang ≥ 14 for C++20 support.
-- If `libhmm` is not found locally, CMake fetches it automatically at v3.8.0.
+- If `libhmm` is not found locally, CMake fetches it automatically at v4.0.4.
 
 ```bash
 python -m pip install -e ".[test]" -Ccmake.build-type=Release

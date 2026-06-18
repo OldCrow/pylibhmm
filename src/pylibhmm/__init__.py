@@ -400,7 +400,13 @@ def from_json(src: str) -> Hmm:
     Raises:
         RuntimeError: On malformed input.
     """
-    return _core.from_json(src)
+    core = _core.from_json(src)
+    result = Hmm(core.num_states)
+    result.set_pi(core.get_pi())
+    result.set_trans(core.get_trans())
+    for i in range(core.num_states):
+        result.set_distribution(i, core.get_distribution(i))
+    return result
 
 
 def save_json(hmm: Hmm, filepath: str | Path) -> None:
@@ -428,7 +434,13 @@ def load_json(filepath: str | Path) -> Hmm:
     Raises:
         RuntimeError: If the file cannot be read or parsed.
     """
-    return _core.load_json(str(filepath))
+    core = _core.load_json(str(filepath))
+    result = Hmm(core.num_states)
+    result.set_pi(core.get_pi())
+    result.set_trans(core.get_trans())
+    for i in range(core.num_states):
+        result.set_distribution(i, core.get_distribution(i))
+    return result
 
 
 def load_hmm(filepath: str | Path):
@@ -591,7 +603,13 @@ def to_json_mv(hmm: HmmMV) -> str:
 
 def from_json_mv(src: str) -> HmmMV:
     """Deserialize a multivariate HMM from a JSON string."""
-    return _core.from_json_mv(src)
+    core = _core.from_json_mv(src)
+    result = HmmMV(core.num_states)
+    result.set_pi(core.get_pi())
+    result.set_trans(core.get_trans())
+    for i in range(core.num_states):
+        result.set_distribution(i, core.get_distribution(i))
+    return result
 
 
 def save_json_mv(hmm: HmmMV, filepath: str | Path) -> None:
@@ -601,7 +619,13 @@ def save_json_mv(hmm: HmmMV, filepath: str | Path) -> None:
 
 def load_json_mv(filepath: str | Path) -> HmmMV:
     """Read and deserialize a multivariate HMM from a JSON file."""
-    return _core.load_json_mv(str(filepath))
+    core = _core.load_json_mv(str(filepath))
+    result = HmmMV(core.num_states)
+    result.set_pi(core.get_pi())
+    result.set_trans(core.get_trans())
+    for i in range(core.num_states):
+        result.set_distribution(i, core.get_distribution(i))
+    return result
 
 
 def count_free_parameters_mv(hmm: HmmMV) -> int:
