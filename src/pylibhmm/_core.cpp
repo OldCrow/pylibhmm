@@ -167,10 +167,10 @@ struct has_get_standard_deviation<T,
 
 #endif // !PYLIBHMM_HAS_REQUIRES_EXPR
 
-/// Module-level RNG for no-arg sample() calls. Seeded from std::random_device
-/// at module load. Not thread-safe for concurrent no-arg sample() calls;
-/// pass an explicit seed for reproducible or concurrent use.
-static std::mt19937_64 g_rng{std::random_device{}()}; // NOLINT(cert-msc51-cpp)
+/// Thread-local RNG for no-arg sample() calls. Each thread initialises its
+/// own instance from std::random_device on first access; safe for concurrent
+/// no-arg sample() calls without locking.
+static thread_local std::mt19937_64 g_rng{std::random_device{}()}; // NOLINT(cert-msc51-cpp)
 
 template <typename Dist, typename PyClass>
 void bind_distribution_common(PyClass &cls) {
@@ -885,16 +885,18 @@ void bind_mv_distributions(nb::module_ &m) {
         .def_prop_ro("means",
                      [](const DiagonalGaussianDistribution &d) -> nb::object {
                          const auto &v = d.getMean();
-                         auto *buf = new double[v.size()];
-                         std::copy(v.begin(), v.end(), buf);
-                         return buf_to_numpy_owned(buf, v.size());
+                         auto ptr = std::make_unique<double[]>(v.size());
+                         std::copy(v.begin(), v.end(), ptr.get());
+                         auto *raw = ptr.release();
+                         return buf_to_numpy_owned(raw, v.size());
                      })
         .def_prop_ro("variances",
                      [](const DiagonalGaussianDistribution &d) -> nb::object {
                          const auto &v = d.getVariance();
-                         auto *buf = new double[v.size()];
-                         std::copy(v.begin(), v.end(), buf);
-                         return buf_to_numpy_owned(buf, v.size());
+                         auto ptr = std::make_unique<double[]>(v.size());
+                         std::copy(v.begin(), v.end(), ptr.get());
+                         auto *raw = ptr.release();
+                         return buf_to_numpy_owned(raw, v.size());
                      })
         .def("set_parameters",
              [](DiagonalGaussianDistribution &d, NpArray1DIn means, NpArray1DIn variances) {
@@ -944,9 +946,10 @@ void bind_mv_distributions(nb::module_ &m) {
         .def("sample_mv",
              [](const DiagonalGaussianDistribution &d) -> nb::object {
                  auto v = d.sample_mv(g_rng);
-                 auto *buf = new double[v.size()];
-                 std::copy(v.begin(), v.end(), buf);
-                 return buf_to_numpy_owned(buf, v.size());
+                 auto ptr = std::make_unique<double[]>(v.size());
+                 std::copy(v.begin(), v.end(), ptr.get());
+                 auto *raw = ptr.release();
+                 return buf_to_numpy_owned(raw, v.size());
              })
         .def("__repr__", [](const DiagonalGaussianDistribution &d){ return d.toString(); });
 
@@ -961,9 +964,10 @@ void bind_mv_distributions(nb::module_ &m) {
         .def_prop_ro("mean",
                      [](const FullCovarianceGaussianDistribution &d) -> nb::object {
                          const auto &v = d.getMean();
-                         auto *buf = new double[v.size()];
-                         std::copy(v.begin(), v.end(), buf);
-                         return buf_to_numpy_owned(buf, v.size());
+                         auto ptr = std::make_unique<double[]>(v.size());
+                         std::copy(v.begin(), v.end(), ptr.get());
+                         auto *raw = ptr.release();
+                         return buf_to_numpy_owned(raw, v.size());
                      })
         .def_prop_ro("covariance",
                      [](const FullCovarianceGaussianDistribution &d) -> nb::object {
@@ -1014,9 +1018,10 @@ void bind_mv_distributions(nb::module_ &m) {
         .def("sample_mv",
              [](const FullCovarianceGaussianDistribution &d) -> nb::object {
                  auto v = d.sample_mv(g_rng);
-                 auto *buf = new double[v.size()];
-                 std::copy(v.begin(), v.end(), buf);
-                 return buf_to_numpy_owned(buf, v.size());
+                 auto ptr = std::make_unique<double[]>(v.size());
+                 std::copy(v.begin(), v.end(), ptr.get());
+                 auto *raw = ptr.release();
+                 return buf_to_numpy_owned(raw, v.size());
              })
         .def("__repr__", [](const FullCovarianceGaussianDistribution &d){ return d.toString(); });
 
@@ -1143,7 +1148,19 @@ void bind_mv_calculators(nb::module_ &m) {
              [](const MVFBC &calc) -> nb::object {
                  return matrix_to_numpy(calc.getLogBackwardVariables());
              })
-        .def_prop_ro("num_states", &MVFBC::getNumStates);
+        .def_prop_ro("num_states", &MVFBC::getNumStates)
+        .def("decode_posterior",
+             [](MVFBC &calc) -> nb::object {
+                 StateSequence seq;
+                 {
+                     nb::gil_scoped_release release;
+                     seq = calc.decodePosterior();
+                 }
+                 return state_sequence_to_numpy(seq);
+             },
+             "Per-step argmax-\u03b3 decoding: returns the most probable state at each "
+             "time step independently. Minimises per-step state error rate. "
+             "Unlike Viterbi, the result is not guaranteed to be a valid path.");
 }
 
 // ---------------------------------------------------------------------------

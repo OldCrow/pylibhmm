@@ -204,6 +204,36 @@ def test_map_baum_welch_compute_log_prior(simple_hmm):
     assert np.isfinite(lp)
 
 
+# ---------------------------------------------------------------------------
+# P-4: from_json / load_json must return the Python Hmm subclass
+# ---------------------------------------------------------------------------
+
+def test_from_json_returns_python_subclass(simple_hmm):
+    json_str = pylibhmm.to_json(simple_hmm)
+    result = pylibhmm.from_json(json_str)
+    assert isinstance(result, pylibhmm.Hmm)
+    assert type(result) is pylibhmm.Hmm
+
+
+def test_load_json_returns_python_subclass(simple_hmm):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "model.json"
+        pylibhmm.save_json(simple_hmm, path)
+        result = pylibhmm.load_json(path)
+    assert isinstance(result, pylibhmm.Hmm)
+    assert type(result) is pylibhmm.Hmm
+
+
+def test_from_json_subclass_can_set_pi(simple_hmm):
+    """Deserialized Hmm must have Python-validated set_pi available."""
+    json_str = pylibhmm.to_json(simple_hmm)
+    result = pylibhmm.from_json(json_str)
+    pi = result.get_pi()
+    # Re-setting the same pi via the Python wrapper should not raise.
+    result.set_pi(pi)
+    np.testing.assert_allclose(result.get_pi(), pi)
+
+
 def test_map_baum_welch_zero_pseudo_count_matches_mle(simple_hmm):
     # c=0 must not raise; it recovers standard Baum-Welch
     sequences = [

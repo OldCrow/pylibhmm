@@ -421,3 +421,94 @@ class TestMVIO:
         for s in seqs:
             lp = p.MVForwardBackwardCalculator(hmm2, s).log_probability
             assert math.isfinite(lp)
+
+    # P-4: from_json_mv / load_json_mv must return the Python HmmMV subclass.
+    def test_from_json_mv_returns_python_subclass(self):
+        hmm, _ = self._make_trained_hmm()
+        json_str = p.to_json_mv(hmm)
+        result = p.from_json_mv(json_str)
+        assert isinstance(result, p.HmmMV)
+        assert type(result) is p.HmmMV
+
+    def test_load_json_mv_returns_python_subclass(self):
+        hmm, _ = self._make_trained_hmm()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = Path(f.name)
+        try:
+            p.save_json_mv(hmm, path)
+            result = p.load_json_mv(path)
+            assert isinstance(result, p.HmmMV)
+            assert type(result) is p.HmmMV
+        finally:
+            path.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# P-3: MVForwardBackwardCalculator.decode_posterior
+# ---------------------------------------------------------------------------
+
+class TestMVDecodePosterior:
+    N = 2
+    D = 2
+
+    def _make_calc(self):
+        hmm = make_hmm_mv(self.N, self.D)
+        seqs = make_sequences(n_seq=4, T=30, D=self.D, seed=20)
+        p.kmeans_init(hmm, seqs, seed=6)
+        trainer = p.MVBaumWelchTrainer(hmm, seqs)
+        for _ in range(5):
+            trainer.train()
+        return p.MVForwardBackwardCalculator(hmm, seqs[0]), seqs[0].shape[0]
+
+    def test_decode_posterior_shape(self):
+        calc, T = self._make_calc()
+        posterior = calc.decode_posterior()
+        assert posterior.shape == (T,)
+
+    def test_decode_posterior_dtype_int64(self):
+        calc, _ = self._make_calc()
+        posterior = calc.decode_posterior()
+        assert posterior.dtype == np.int64
+
+    def test_decode_posterior_valid_states(self):
+        calc, _ = self._make_calc()
+        posterior = calc.decode_posterior()
+        assert set(posterior.tolist()).issubset(set(range(self.N)))
+
+
+# ---------------------------------------------------------------------------
+# P-1: thread-local RNG — sample_mv from concurrent threads is non-crashing
+# ---------------------------------------------------------------------------
+
+def test_sample_mv_thread_safety():
+    """Draw samples from DiagonalGaussian across multiple threads.
+
+    Each thread uses its own thread-local RNG so no locking is needed.
+    The test verifies that concurrent no-arg sample_mv() calls do not crash
+    and return finite values for all threads.
+    """
+    import threading
+
+    D = 4
+    d = p.DiagonalGaussian(D)
+    results = []
+    errors = []
+
+    def worker():
+        try:
+            for _ in range(100):
+                s = d.sample_mv()
+                assert s.shape == (D,)
+                assert np.all(np.isfinite(s))
+            results.append(True)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"Thread errors: {errors}"
+    assert len(results) == 8
