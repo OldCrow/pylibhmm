@@ -677,7 +677,13 @@ void bind_trainers(nb::module_ &m) {
              [](BaumWelchHolder &h) {
                  nb::gil_scoped_release release;
                  h.trainer_.train();
-             });
+             })
+        .def_prop_ro("last_log_probability",
+                     [](const BaumWelchHolder &h) {
+                         return h.trainer_.getLastLogProbability();
+                     },
+                     "Total E-step log-probability from the last train() call. "
+                     "-inf before train() is called or if all sequences had zero probability.");
 
     nb::class_<ViterbiHolder>(m, "ViterbiTrainer")
         .def(
@@ -1179,7 +1185,13 @@ void bind_mv_trainers(nb::module_ &m) {
              [](MVBaumWelchHolder &h) {
                  nb::gil_scoped_release release;
                  h.trainer_.train();
-             });
+             })
+        .def_prop_ro("last_log_probability",
+                     [](const MVBaumWelchHolder &h) {
+                         return h.trainer_.getLastLogProbability();
+                     },
+                     "Total E-step log-probability from the last train() call. "
+                     "-inf before train() is called or if all sequences had zero probability.");
 
     m.def("kmeans_init",
           [](HmmMV &hmm, const nb::list &sequences, uint64_t seed) {

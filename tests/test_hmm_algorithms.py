@@ -51,6 +51,18 @@ def test_baum_welch_training_runs(simple_hmm):
     simple_hmm.validate()
 
 
+def test_baum_welch_last_log_probability(simple_hmm):
+    sequences = [
+        np.array([0, 1, 5, 4, 3, 5], dtype=np.float64),
+        np.array([5, 5, 4, 5, 0, 1], dtype=np.float64),
+    ]
+    trainer = pylibhmm.BaumWelchTrainer(simple_hmm, sequences)
+    assert not np.isfinite(trainer.last_log_probability)
+    trainer.train()
+    assert np.isfinite(trainer.last_log_probability)
+    assert trainer.last_log_probability < 0.0
+
+
 def test_viterbi_trainer_config(simple_hmm):
     cfg = pylibhmm.training_preset_fast()
     trainer = pylibhmm.ViterbiTrainer(

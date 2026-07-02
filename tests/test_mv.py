@@ -337,6 +337,17 @@ class TestHmmMV:
         k = p.count_free_parameters_mv(hmm)
         assert k > 0
 
+    def test_baum_welch_last_log_probability(self):
+        hmm = make_hmm_mv(self.N, self.D)
+        seqs = make_sequences(n_seq=4, T=30, D=self.D, seed=42)
+        p.kmeans_init(hmm, seqs, seed=7)
+        trainer = p.MVBaumWelchTrainer(hmm, seqs)
+        import math
+        assert not math.isfinite(trainer.last_log_probability)
+        trainer.train()
+        assert math.isfinite(trainer.last_log_probability)
+        assert trainer.last_log_probability < 0.0
+
 
 # ---------------------------------------------------------------------------
 # Kmeans init
