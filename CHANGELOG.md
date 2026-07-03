@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.7.4 (2026-07-02)
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.1.4`, which resolves MSVC C4244 and
+  C4267 warnings in the AVX-512 SIMD math helpers and example support headers.
+
+## v0.7.3 (2026-07-02)
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.1.3`, which removes the remaining
+  invalid `vreinterpretq_u64_f64(vceqq_f64(...))` wrappers in the StudentT and
+  VonMises NEON batch kernels. Resolves linux-aarch64 wheel build failures.
+
+## v0.7.2 (2026-07-02)
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.1.2`, which completes the
+  linux-aarch64 NEON compile fixes in the upstream SIMD batch kernels (Beta,
+  StudentT, and VonMises `vreinterpretq_u64_f64` wrappers).
+
+## v0.7.1 (2026-07-02)
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.1.1`, which fixes the
+  linux-aarch64 NEON compile failure caused by a spurious
+  `vreinterpretq_u64_f64` wrapper around `vceqq_f64` in
+  `detail/simd_math_helpers.h`.
+
+## v0.7.0 (2026-07-02)
+
+### Added
+- **`BaumWelchTrainer.last_log_probability`** — exposes the total finite
+  E-step log-probability computed during `train()`. Returns `-inf` before
+  training and after all-invalid-sequence training. Binds
+  `BasicBaumWelchTrainer::getLastLogProbability()` introduced in libhmm
+  v4.1.0; available on both `BaumWelchTrainer` and `MVBaumWelchTrainer`.
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.1.0` (was `v4.0.4`), picking
+  up the tier-2 SIMD distribution backend expansion and the runtime
+  `DoubleVecOps` CPU-dispatch table.
+
 ## v0.6.3 (2026-06-18)
 
 ### Bug fixes

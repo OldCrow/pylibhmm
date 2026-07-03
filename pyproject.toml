@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pylibhmm"
-version = "0.7.3"
+version = "0.7.4"
 description = "Python bindings for libhmm v4 — scalar and multivariate HMMs with NumPy-friendly distributions"
 readme = "README.md"
 license = { text = "MIT" }
