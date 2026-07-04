@@ -2,6 +2,12 @@
 
 ## v0.9.2 (2026-07-04)
 
+### Changed
+- **CI Python matrix updated to 3.12–3.14**: drops 3.11 (past SPEC 0 42-month
+  window as of April 2026; security-only since October 2025) and adds 3.14
+  (released October 2025). Wheel builds also drop cp311 via `CIBW_SKIP`.
+  `requires-python = ">=3.11"` is retained for one more cycle.
+
 ### Added
 - **ASan CI job** (Finding 2, pylibhmm half): builds the extension with
   `-fsanitize=address` and runs pytest under ASan via `LD_PRELOAD` on Linux.
