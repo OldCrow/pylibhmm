@@ -49,8 +49,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build extension with ASan
+      - name: Build extension with ASan (libhmm + extension both instrumented)
         run: |
+          # CMAKE_CXX_FLAGS propagates to the libhmm add_subdirectory build, so
+          # all C++ code in the call stack (libhmm + _core.cpp) is uniformly
+          # ASan-instrumented.  Without this, C++ exception unwinding from
+          # uninstrumented libhmm frames into instrumented _core.cpp frames
+          # triggers spurious ASan aborts.
           pip install ".[test]" \
             -Ccmake.define.CMAKE_CXX_FLAGS="-fsanitize=address -g -O1 -fno-omit-frame-pointer" \
             -Ccmake.define.CMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
@@ -62,16 +67,8 @@ jobs:
           # detect_leaks=0: CPython GC has intentional leaks at shutdown.
           # alloc_dealloc_mismatch=0: suppresses false positives from mixed
           #   malloc implementations across CPython, numpy, and our extension.
-          # abort_on_error omitted (default=0): ASan reports errors and lets
-          #   the process continue; exception-propagation through non-instrumented
-          #   CPython/numpy frames triggers false abort()s with abort_on_error=1.
-          #   Real bugs (UAF, heap corruption) still crash the process and fail
-          #   the job via exit code != 0.
-          # Skip tests that test C++ exception propagation: C++ stack unwinding
-          # through mixed ASan/non-ASan frames (CPython, numpy) causes spurious
-          # aborts with LD_PRELOAD ASan. These paths are covered by the standard
-          # CI matrix. The ASan job targets memory bugs in HMM computation.
+          # LD_PRELOAD still needed: Python itself is not ASan-compiled.
           LD_PRELOAD=$LIBASAN \
             PYTHONMALLOC=malloc \
             ASAN_OPTIONS=detect_leaks=0:alloc_dealloc_mismatch=0 \
-            pytest tests -v --tb=short -k "not invalid"
+            pytest tests -v --tb=short
