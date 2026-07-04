@@ -58,7 +58,12 @@ jobs:
       - name: Run tests under ASan
         run: |
           LIBASAN=$(gcc -print-file-name=libasan.so)
+          # PYTHONMALLOC=malloc: forces CPython to use system malloc instead of
+          # its custom pymalloc allocator.  Without this, ASan sees CPython
+          # managing memory outside its tracking and aborts (SIGABRT/exit 134).
+          # detect_leaks=0 still needed: CPython's gc has intentional leaks.
           LD_PRELOAD=$LIBASAN \
+            PYTHONMALLOC=malloc \
             ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 \
             UBSAN_OPTIONS=print_stacktrace=1 \
             pytest tests -v --tb=short
