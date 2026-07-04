@@ -372,6 +372,15 @@ struct MVBaumWelchHolder {
         , trainer_(hmm, *data_) {}
 };
 
+using MVMAPBWTrainer = BasicMapBaumWelchTrainer<ObservationVectorView>;
+struct MVMapBaumWelchHolder {
+    std::unique_ptr<MultiObservationLists> data_;
+    MVMAPBWTrainer                         trainer_;
+    MVMapBaumWelchHolder(HmmMV& hmm, MultiObservationLists obs, double pc = 1.0)
+        : data_(std::make_unique<MultiObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_, pc) {}
+};
+
 // ---------------------------------------------------------------------------
 // bind_distributions — base EmissionDistribution and all concrete subtypes.
 // ---------------------------------------------------------------------------
@@ -1180,6 +1189,29 @@ void bind_mv_calculators(nb::module_ &m) {
              "Per-step argmax-\u03b3 decoding: returns the most probable state at each "
              "time step independently. Minimises per-step state error rate. "
              "Unlike Viterbi, the result is not guaranteed to be a valid path.");
+
+    using MVVC = BasicViterbiCalculator<ObservationVectorView>;
+    nb::class_<MVVC>(m, "MVViterbiCalculator")
+        .def("__init__",
+             [](MVVC *self, HmmMV &h, NpArray2DIn observations) {
+                 auto mat = obs_matrix_from_numpy(observations);
+                 new (self) MVVC(h, std::move(mat));
+             },
+             nb::arg("hmm"), nb::arg("observations").noconvert(),
+             nb::keep_alive<1, 2>())
+        .def_prop_ro("log_probability", &MVVC::getLogProbability)
+        .def("decode",
+             [](MVVC &calc) -> nb::object {
+                 StateSequence seq;
+                 {
+                     nb::gil_scoped_release release;
+                     seq = calc.decode();
+                 }
+                 return state_sequence_to_numpy(seq);
+             },
+             "Viterbi MAP decoding: returns the most probable state sequence (1-D int64 array). "
+             "Use when whole-sequence structural coherence is required.")
+        .def_prop_ro("num_states", &MVVC::getNumStates);
 }
 
 // ---------------------------------------------------------------------------
@@ -1228,6 +1260,29 @@ void bind_mv_trainers(nb::module_ &m) {
                      },
                      "True if the last train() call converged (no assignment change). "
                      "False if max_iterations was reached without convergence.");
+
+    nb::class_<MVMapBaumWelchHolder>(m, "MVMapBaumWelchTrainer")
+        .def("__init__",
+             [](MVMapBaumWelchHolder *self, HmmMV &h, const nb::list &sequences,
+                double pseudo_count) {
+                 auto lists = multi_obs_lists_from_python(sequences);
+                 new (self) MVMapBaumWelchHolder(h, std::move(lists), pseudo_count);
+             },
+             nb::arg("hmm"), nb::arg("sequences"),
+             nb::arg("pseudo_count") = 1.0,
+             nb::keep_alive<1, 2>())
+        .def("train",
+             [](MVMapBaumWelchHolder &h) {
+                 nb::gil_scoped_release release;
+                 h.trainer_.train();
+             })
+        .def_prop_rw("pseudo_count",
+                     [](const MVMapBaumWelchHolder &h) { return h.trainer_.getPseudoCount(); },
+                     [](MVMapBaumWelchHolder &h, double c) { h.trainer_.setPseudoCount(c); })
+        .def("compute_log_prior",
+             [](const MVMapBaumWelchHolder &h) { return h.trainer_.computeLogPrior(); },
+             "Unnormalised log-prior log P(\u03bb | c). "
+             "Add to last_log_probability for the correct MAP convergence criterion.");
 
     m.def("kmeans_init",
           [](HmmMV &hmm, const nb::list &sequences, uint64_t seed) {

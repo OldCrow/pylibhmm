@@ -582,6 +582,52 @@ class MVBaumWelchTrainer(_core.MVBaumWelchTrainer):
         super().__init__(hmm, _as_mv_sequence_list(sequences))
 
 
+class MVViterbiCalculator(_core.MVViterbiCalculator):
+    """Multivariate Viterbi calculator with automatic array coercion.
+
+    Finds the MAP state sequence for a single observation matrix.
+    Use when whole-sequence structural coherence is required (segmentation,
+    alignment). For per-step annotation accuracy, prefer
+    :meth:`MVForwardBackwardCalculator.decode_posterior`.
+
+    Args:
+        hmm: A :class:`HmmMV` instance.
+        observations: 2-D array-like of shape ``(T, D)``.
+    """
+
+    def __init__(self, hmm: HmmMV, observations):
+        obs = np.ascontiguousarray(np.asarray(observations, dtype=np.float64))
+        if obs.ndim != 2:
+            raise ValueError("observations must be a 2-D array (T, D)")
+        super().__init__(hmm, obs)
+
+
+class MVMapBaumWelchTrainer(_core.MVMapBaumWelchTrainer):
+    """Multivariate MAP Baum-Welch trainer with automatic sequence coercion.
+
+    Adds symmetric Dirichlet priors on A and π. Prevents zero-probability
+    transitions on sparse MV data. ``pseudo_count=0`` recovers standard
+    :class:`MVBaumWelchTrainer` exactly.
+
+    Convergence criterion: ``log P(O|\u03bb) + compute_log_prior()``.
+    ``log P(O|\u03bb)`` must be computed separately via
+    :class:`MVForwardBackwardCalculator` (see libhmm issue #55 — a
+    ``last_log_probability`` property will be added in a future release).
+
+    Args:
+        hmm: The :class:`HmmMV` to train. Mutated in place.
+        sequences: Iterable of 2-D array-like sequences, each shape ``(T_i, D)``.
+        pseudo_count: Dirichlet pseudo-count c ≥ 0 (default 1.0).
+
+    Note:
+        The HMM must outlive this object (nanobind keep-alive enforced
+        at the C++ layer).
+    """
+
+    def __init__(self, hmm: HmmMV, sequences, pseudo_count: float = 1.0):
+        super().__init__(hmm, _as_mv_sequence_list(sequences), float(pseudo_count))
+
+
 class MVSegmentalKMeansTrainer(_core.MVSegmentalKMeansTrainer):
     """Multivariate segmental k-means trainer with automatic sequence coercion.
 
@@ -721,7 +767,9 @@ __all__ = [
     "MVBaumWelchTrainer",
     "MVEmissionDistribution",
     "MVForwardBackwardCalculator",
+    "MVMapBaumWelchTrainer",
     "MVSegmentalKMeansTrainer",
+    "MVViterbiCalculator",
     "count_free_parameters_mv",
     "from_json_mv",
     "kmeans_init",

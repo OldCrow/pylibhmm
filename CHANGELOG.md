@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.9.0 (2026-07-04)
+
+### Added
+- **`MVViterbiCalculator`** — binds `BasicViterbiCalculator<ObservationVectorView>`. Accepts
+  `HmmMV` and a 2-D NumPy array; exposes `decode()` (1-D int64 MAP path) and `log_probability`.
+  Closes pylibhmm#7.
+- **`MVMapBaumWelchTrainer`** — binds `BasicMapBaumWelchTrainer<ObservationVectorView>`. Adds
+  Dirichlet priors on A and π for sparse MV data. Exposes `train()`, `last_log_probability`,
+  `pseudo_count` (read/write), and `compute_log_prior()`. `pseudo_count=0` recovers standard
+  `MVBaumWelchTrainer` exactly. Closes pylibhmm#8.
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.2.1` (ChiSquared Newton MLE; fit quality audit).
+
+---
+
 ## v0.8.0 (2026-07-04)
 
 ### Added
