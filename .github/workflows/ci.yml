@@ -67,7 +67,11 @@ jobs:
           #   CPython/numpy frames triggers false abort()s with abort_on_error=1.
           #   Real bugs (UAF, heap corruption) still crash the process and fail
           #   the job via exit code != 0.
+          # Skip tests that test C++ exception propagation: C++ stack unwinding
+          # through mixed ASan/non-ASan frames (CPython, numpy) causes spurious
+          # aborts with LD_PRELOAD ASan. These paths are covered by the standard
+          # CI matrix. The ASan job targets memory bugs in HMM computation.
           LD_PRELOAD=$LIBASAN \
             PYTHONMALLOC=malloc \
             ASAN_OPTIONS=detect_leaks=0:alloc_dealloc_mismatch=0 \
-            pytest tests -v --tb=short
+            pytest tests -v --tb=short -k "not invalid"
