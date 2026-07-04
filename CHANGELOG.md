@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.9.1 (2026-07-04)
+
+### Fixed
+- **Use-after-free in all four calculator bindings** (Finding 1): `ForwardBackwardCalculator`,
+  `ViterbiCalculator`, `MVForwardBackwardCalculator`, and `MVViterbiCalculator` stored their
+  observation sequence by reference to a temporary that died when the `__init__` lambda
+  returned. Any subsequent `compute()` / `decode()` call re-read freed memory, producing
+  silently-corrupted results rather than a crash. Extended the established Holder pattern
+  (already used for all trainer classes) to all four calculator classes. No API changes.
+  Regression tests in `tests/test_calculator_uaf_regression.py`.
+- Removes the `ViterbiCalculator.decode()` workaround that returned the cached
+  `getStateSequence()` instead of re-running Viterbi; `decode()` now safely re-runs.
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.2.3`, which adds compile-time guards
+  (deleted rvalue overloads on derived calculator classes) that flag the old binding
+  patterns as compile errors, and fixes denormal guards, `DiscreteDistribution` weighted
+  fit under-normalization, and `decodePosterior()` silent failure.
+
+---
+
 ## v0.9.0 (2026-07-04)
 
 ### Added
