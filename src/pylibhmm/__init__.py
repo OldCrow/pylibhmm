@@ -609,10 +609,9 @@ class MVMapBaumWelchTrainer(_core.MVMapBaumWelchTrainer):
     transitions on sparse MV data. ``pseudo_count=0`` recovers standard
     :class:`MVBaumWelchTrainer` exactly.
 
-    Convergence criterion: ``log P(O|\u03bb) + compute_log_prior()``.
-    ``log P(O|\u03bb)`` must be computed separately via
-    :class:`MVForwardBackwardCalculator` (see libhmm issue #55 — a
-    ``last_log_probability`` property will be added in a future release).
+    Convergence criterion: ``last_log_probability + compute_log_prior()``.
+    ``last_log_probability`` stores the pre-M-step E-step log P(O|\u03bb) from
+    the last ``train()`` call (same semantics as :class:`MVBaumWelchTrainer`).
 
     Args:
         hmm: The :class:`HmmMV` to train. Mutated in place.
