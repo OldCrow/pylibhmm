@@ -29,15 +29,15 @@
 ///   (nb::rv_policy::reference_internal) into the HMM's internal storage;
 ///   it must not outlive the Hmm.
 ///
-/// Trainer holders
-///   libhmm v4 BasicTrainer stores observations by const reference_wrapper,
-///   not by value (v4 breaking change).  Python __init__ lambdas would create
-///   local ObservationLists that die when the lambda returns, leaving every
-///   trainer with a dangling obsLists_ref_.  Each trainer is wrapped in a
+/// Trainer and calculator holders
+///   libhmm v4 trainers and calculators store their inputs by const
+///   reference_wrapper, not by value.  Python __init__ lambdas would create
+///   local temporaries that die when the lambda returns, leaving every object
+///   with a dangling reference.  Each trainer and calculator is wrapped in a
 ///   *Holder struct that owns the data on the heap (unique_ptr — stable
-///   address) and passes *data_ to the inner trainer.  data_ is declared
-///   before trainer_ so C++ member-init order guarantees it is alive when
-///   trainer_ stores std::cref(*data_).
+///   address) and passes *data_ to the inner object.  data_ is declared
+///   before the inner object so C++ member-init order guarantees it is alive
+///   when the inner object stores std::cref(*data_).
 ///
 /// Compiler portability
 ///   PYLIBHMM_HAS_REQUIRES_EXPR selects C++20 requires expressions (preferred)
@@ -382,6 +382,53 @@ struct MVMapBaumWelchHolder {
 };
 
 // ---------------------------------------------------------------------------
+// Calculator holders — own observation data on the heap so each calculator's
+// reference_wrapper<const SeqType> always points to live storage.
+//
+// Member declaration order matters: data_ before calc_ so that data_ is
+// fully constructed before calc_(hmm, *data_) stores std::cref(*data_).
+// ---------------------------------------------------------------------------
+
+struct FBCalcHolder {
+    std::unique_ptr<ObservationSet> data_;
+    ForwardBackwardCalculator       calc_;
+    FBCalcHolder(const Hmm &h, ObservationSet obs)
+        : data_(std::make_unique<ObservationSet>(std::move(obs)))
+        , calc_(h, *data_) {}
+    // Move new observations into *data_ before rebinding calc_ so
+    // obsRef_ always points at heap-owned storage.
+    void compute(ObservationSet obs) {
+        *data_ = std::move(obs);
+        calc_.compute(*data_);
+    }
+    void compute() { calc_.compute(*data_); }
+};
+
+struct ViterbiCalcHolder {
+    std::unique_ptr<ObservationSet> data_;
+    ViterbiCalculator               calc_;
+    ViterbiCalcHolder(const Hmm &h, ObservationSet obs)
+        : data_(std::make_unique<ObservationSet>(std::move(obs)))
+        , calc_(h, *data_) {}
+};
+
+struct MVFBCalcHolder {
+    std::unique_ptr<ObservationMatrix>                    data_;
+    BasicForwardBackwardCalculator<ObservationVectorView> calc_;
+    MVFBCalcHolder(HmmMV &h, ObservationMatrix mat)
+        : data_(std::make_unique<ObservationMatrix>(std::move(mat)))
+        , calc_(h, *data_) {}
+};
+
+struct MVViterbiCalcHolder {
+    std::unique_ptr<ObservationMatrix>              data_;
+    BasicViterbiCalculator<ObservationVectorView>   calc_;
+    MVViterbiCalcHolder(HmmMV &h, ObservationMatrix mat)
+        : data_(std::make_unique<ObservationMatrix>(std::move(mat)))
+        , calc_(h, *data_) {}
+};
+
+// ---------------------------------------------------------------------------
 // bind_distributions — base EmissionDistribution and all concrete subtypes.
 // ---------------------------------------------------------------------------
 void bind_distributions(nb::module_ &m) {
@@ -589,16 +636,14 @@ void bind_hmm(nb::module_ &m) {
 // bind_calculators — ForwardBackwardCalculator and ViterbiCalculator.
 // ---------------------------------------------------------------------------
 void bind_calculators(nb::module_ &m) {
-    // keep_alive<1,2>: the HMM (arg 2) is kept alive at least as long as
-    // the calculator (arg 1 = self), preventing use-after-free on the
-    // non-owning reference the calculator holds to its model.
-    nb::class_<ForwardBackwardCalculator>(m, "ForwardBackwardCalculator")
+    // Bind the Holder types under the public Python names.  keep_alive<1,2>
+    // keeps the HMM (arg 2) alive at least as long as the holder (arg 1 =
+    // self), since the inner calculator holds a non-owning reference to it.
+    nb::class_<FBCalcHolder>(m, "ForwardBackwardCalculator")
         .def(
             "__init__",
-            // Placement-new is the nanobind pattern for types whose C++
-            // constructor takes non-trivial arguments.
-            [](ForwardBackwardCalculator *self, const Hmm &h, NpArray1DIn observations) {
-                new (self) ForwardBackwardCalculator(h, observation_set_from_numpy(observations));
+            [](FBCalcHolder *self, const Hmm &h, NpArray1DIn observations) {
+                new (self) FBCalcHolder(h, observation_set_from_numpy(observations));
             },
             nb::arg("hmm"),
             nb::arg("observations").noconvert(),
@@ -606,34 +651,37 @@ void bind_calculators(nb::module_ &m) {
         // GIL is released for the compute pass so other Python threads
         // can run concurrently while C++ processes the observation sequence.
         .def("compute",
-             [](ForwardBackwardCalculator &calc, NpArray1DIn observations) {
+             [](FBCalcHolder &holder, NpArray1DIn observations) {
                  auto obs = observation_set_from_numpy(observations);
                  nb::gil_scoped_release release;
-                 calc.compute(obs);
+                 holder.compute(std::move(obs));
              },
              nb::arg("observations").noconvert())
         .def("compute",
-             [](ForwardBackwardCalculator &calc) {
+             [](FBCalcHolder &holder) {
                  nb::gil_scoped_release release;
-                 calc.compute();
+                 holder.compute();
              })
-        .def_prop_ro("log_probability", &ForwardBackwardCalculator::getLogProbability)
-        .def_prop_ro("probability", &ForwardBackwardCalculator::probability)
+        .def_prop_ro("log_probability",
+                     [](const FBCalcHolder &h) { return h.calc_.getLogProbability(); })
+        .def_prop_ro("probability",
+                     [](const FBCalcHolder &h) { return h.calc_.probability(); })
         .def("get_log_forward_variables",
-             [](const ForwardBackwardCalculator &calc) -> nb::object {
-                 return matrix_to_numpy(calc.getLogForwardVariables());
+             [](const FBCalcHolder &h) -> nb::object {
+                 return matrix_to_numpy(h.calc_.getLogForwardVariables());
              })
         .def("get_log_backward_variables",
-             [](const ForwardBackwardCalculator &calc) -> nb::object {
-                 return matrix_to_numpy(calc.getLogBackwardVariables());
+             [](const FBCalcHolder &h) -> nb::object {
+                 return matrix_to_numpy(h.calc_.getLogBackwardVariables());
              })
-        .def_prop_ro("num_states", &ForwardBackwardCalculator::getNumStates)
+        .def_prop_ro("num_states",
+                     [](const FBCalcHolder &h) { return h.calc_.getNumStates(); })
         .def("decode_posterior",
-             [](ForwardBackwardCalculator &calc) -> nb::object {
+             [](FBCalcHolder &holder) -> nb::object {
                  StateSequence seq;
                  {
                      nb::gil_scoped_release release;
-                     seq = calc.decodePosterior();
+                     seq = holder.calc_.decodePosterior();
                  }
                  return state_sequence_to_numpy(seq);
              },
@@ -641,29 +689,32 @@ void bind_calculators(nb::module_ &m) {
              "time step independently. Minimises per-step state error rate. "
              "Unlike Viterbi, the result is not guaranteed to be a valid path.");
 
-    nb::class_<ViterbiCalculator>(m, "ViterbiCalculator")
+    nb::class_<ViterbiCalcHolder>(m, "ViterbiCalculator")
         .def(
             "__init__",
-            [](ViterbiCalculator *self, const Hmm &h, NpArray1DIn observations) {
-                new (self) ViterbiCalculator(h, observation_set_from_numpy(observations));
+            [](ViterbiCalcHolder *self, const Hmm &h, NpArray1DIn observations) {
+                new (self) ViterbiCalcHolder(h, observation_set_from_numpy(observations));
             },
             nb::arg("hmm"),
             nb::arg("observations").noconvert(),
             nb::keep_alive<1, 2>())
         .def("decode",
-             [](const ViterbiCalculator &calc) -> nb::object {
-                 // The Viterbi pass ran in the constructor while the temp
-                 // ObservationSet was still alive.  Re-calling calc.decode()
-                 // would re-read the now-dangling obsRef_; return the cached
-                 // result via getStateSequence() instead.
-                 return state_sequence_to_numpy(calc.getStateSequence());
+             [](ViterbiCalcHolder &holder) -> nb::object {
+                 StateSequence seq;
+                 {
+                     nb::gil_scoped_release release;
+                     seq = holder.calc_.decode();
+                 }
+                 return state_sequence_to_numpy(seq);
              })
-        .def_prop_ro("log_probability", &ViterbiCalculator::getLogProbability)
+        .def_prop_ro("log_probability",
+                     [](const ViterbiCalcHolder &h) { return h.calc_.getLogProbability(); })
         .def("get_state_sequence",
-             [](const ViterbiCalculator &calc) -> nb::object {
-                 return state_sequence_to_numpy(calc.getStateSequence());
+             [](const ViterbiCalcHolder &h) -> nb::object {
+                 return state_sequence_to_numpy(h.calc_.getStateSequence());
              })
-        .def_prop_ro("num_states", &ViterbiCalculator::getNumStates);
+        .def_prop_ro("num_states",
+                     [](const ViterbiCalcHolder &h) { return h.calc_.getNumStates(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -1158,31 +1209,31 @@ void bind_hmm_mv(nb::module_ &m) {
 // bind_mv_calculators
 // ---------------------------------------------------------------------------
 void bind_mv_calculators(nb::module_ &m) {
-    using MVFBC = BasicForwardBackwardCalculator<ObservationVectorView>;
-    nb::class_<MVFBC>(m, "MVForwardBackwardCalculator")
+    nb::class_<MVFBCalcHolder>(m, "MVForwardBackwardCalculator")
         .def("__init__",
-             [](MVFBC *self, HmmMV &h, NpArray2DIn observations) {
-                 auto mat = obs_matrix_from_numpy(observations);
-                 new (self) MVFBC(h, std::move(mat));
+             [](MVFBCalcHolder *self, HmmMV &h, NpArray2DIn observations) {
+                 new (self) MVFBCalcHolder(h, obs_matrix_from_numpy(observations));
              },
              nb::arg("hmm"), nb::arg("observations").noconvert(),
              nb::keep_alive<1, 2>())
-        .def_prop_ro("log_probability", &MVFBC::getLogProbability)
+        .def_prop_ro("log_probability",
+                     [](const MVFBCalcHolder &h) { return h.calc_.getLogProbability(); })
         .def("get_log_forward_variables",
-             [](const MVFBC &calc) -> nb::object {
-                 return matrix_to_numpy(calc.getLogForwardVariables());
+             [](const MVFBCalcHolder &h) -> nb::object {
+                 return matrix_to_numpy(h.calc_.getLogForwardVariables());
              })
         .def("get_log_backward_variables",
-             [](const MVFBC &calc) -> nb::object {
-                 return matrix_to_numpy(calc.getLogBackwardVariables());
+             [](const MVFBCalcHolder &h) -> nb::object {
+                 return matrix_to_numpy(h.calc_.getLogBackwardVariables());
              })
-        .def_prop_ro("num_states", &MVFBC::getNumStates)
+        .def_prop_ro("num_states",
+                     [](const MVFBCalcHolder &h) { return h.calc_.getNumStates(); })
         .def("decode_posterior",
-             [](MVFBC &calc) -> nb::object {
+             [](MVFBCalcHolder &holder) -> nb::object {
                  StateSequence seq;
                  {
                      nb::gil_scoped_release release;
-                     seq = calc.decodePosterior();
+                     seq = holder.calc_.decodePosterior();
                  }
                  return state_sequence_to_numpy(seq);
              },
@@ -1190,28 +1241,28 @@ void bind_mv_calculators(nb::module_ &m) {
              "time step independently. Minimises per-step state error rate. "
              "Unlike Viterbi, the result is not guaranteed to be a valid path.");
 
-    using MVVC = BasicViterbiCalculator<ObservationVectorView>;
-    nb::class_<MVVC>(m, "MVViterbiCalculator")
+    nb::class_<MVViterbiCalcHolder>(m, "MVViterbiCalculator")
         .def("__init__",
-             [](MVVC *self, HmmMV &h, NpArray2DIn observations) {
-                 auto mat = obs_matrix_from_numpy(observations);
-                 new (self) MVVC(h, std::move(mat));
+             [](MVViterbiCalcHolder *self, HmmMV &h, NpArray2DIn observations) {
+                 new (self) MVViterbiCalcHolder(h, obs_matrix_from_numpy(observations));
              },
              nb::arg("hmm"), nb::arg("observations").noconvert(),
              nb::keep_alive<1, 2>())
-        .def_prop_ro("log_probability", &MVVC::getLogProbability)
+        .def_prop_ro("log_probability",
+                     [](const MVViterbiCalcHolder &h) { return h.calc_.getLogProbability(); })
         .def("decode",
-             [](MVVC &calc) -> nb::object {
+             [](MVViterbiCalcHolder &holder) -> nb::object {
                  StateSequence seq;
                  {
                      nb::gil_scoped_release release;
-                     seq = calc.decode();
+                     seq = holder.calc_.decode();
                  }
                  return state_sequence_to_numpy(seq);
              },
              "Viterbi MAP decoding: returns the most probable state sequence (1-D int64 array). "
              "Use when whole-sequence structural coherence is required.")
-        .def_prop_ro("num_states", &MVVC::getNumStates);
+        .def_prop_ro("num_states",
+                     [](const MVViterbiCalcHolder &h) { return h.calc_.getNumStates(); });
 }
 
 // ---------------------------------------------------------------------------
