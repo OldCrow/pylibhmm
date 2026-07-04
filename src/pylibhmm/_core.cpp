@@ -1276,6 +1276,12 @@ void bind_mv_trainers(nb::module_ &m) {
                  nb::gil_scoped_release release;
                  h.trainer_.train();
              })
+        .def_prop_ro("last_log_probability",
+                     [](const MVMapBaumWelchHolder &h) {
+                         return h.trainer_.getLastLogProbability();
+                     },
+                     "Pre-M-step E-step log P(O|\u03bb) from the last train() call. "
+                     "-inf before train() is called or if all sequences had zero probability.")
         .def_prop_rw("pseudo_count",
                      [](const MVMapBaumWelchHolder &h) { return h.trainer_.getPseudoCount(); },
                      [](MVMapBaumWelchHolder &h, double c) { h.trainer_.setPseudoCount(c); })

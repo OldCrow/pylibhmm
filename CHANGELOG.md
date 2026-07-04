@@ -12,7 +12,8 @@
   `MVBaumWelchTrainer` exactly. Closes pylibhmm#8.
 
 ### Build
-- Pinned libhmm FetchContent fallback to `v4.2.1` (ChiSquared Newton MLE; fit quality audit).
+- Pinned libhmm FetchContent fallback to `v4.2.2` (adds `getLastLogProbability()` to
+  `BasicMapBaumWelchTrainer`, enabling the `last_log_probability` property below).
 
 ---
 
