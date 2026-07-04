@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.0 (2026-07-04)
+
+### Added
+- **`MVSegmentalKMeansTrainer`** — multivariate segmental k-means trainer binding
+  (`BasicSegmentalKMeansTrainer<ObservationVectorView>`). Accepts `HmmMV` and a list of
+  2-D NumPy sequences; exposes `train()` and `is_terminated`. Recommended workflow:
+  `kmeans_init` → `MVSegmentalKMeansTrainer` → `MVBaumWelchTrainer`.
+- **`max_iterations` parameter** on `SegmentalKMeansTrainer` (default 100). Previously
+  the scalar trainer had no iteration cap; the cap now matches the C++ API.
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.2.0`, which adds
+  `BasicSegmentalKMeansTrainer<Obs>` and lifts the discrete-only restriction.
+
+---
+
 ## v0.7.4 (2026-07-02)
 
 ### Build

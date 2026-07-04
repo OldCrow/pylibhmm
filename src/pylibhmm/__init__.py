@@ -274,19 +274,25 @@ class SegmentalKMeansTrainer(_core.SegmentalKMeansTrainer):
     A faster, deterministic alternative to Baum-Welch.  Uses Viterbi-
     based hard segmentation with K-means-style distribution
     re-estimation.  Terminates when the Viterbi segmentation no longer
-    changes between iterations.
+    changes between iterations, or when ``max_iterations`` is reached.
+
+    Works with any scalar :class:`EmissionDistribution` — not just
+    :class:`Discrete`. For continuous-emission HMMs, consider using
+    :class:`MVSegmentalKMeansTrainer` after calling :func:`kmeans_init`.
 
     Args:
         hmm: The :class:`Hmm` to train.  Mutated in place.
         sequences: Iterable of 1-D array-like observation sequences.
+        max_iterations: Hard cap on iterations (default 100).
+            :attr:`is_terminated` is ``True`` only on genuine convergence.
 
     Note:
         The HMM must outlive this object (nanobind keep-alive enforced
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, sequences):
-        super().__init__(hmm, _as_sequence_list(sequences))
+    def __init__(self, hmm: Hmm, sequences, max_iterations: int = 100):
+        super().__init__(hmm, _as_sequence_list(sequences), int(max_iterations))
 
 
 class ModelCriteria(NamedTuple):
@@ -576,6 +582,38 @@ class MVBaumWelchTrainer(_core.MVBaumWelchTrainer):
         super().__init__(hmm, _as_mv_sequence_list(sequences))
 
 
+class MVSegmentalKMeansTrainer(_core.MVSegmentalKMeansTrainer):
+    """Multivariate segmental k-means trainer with automatic sequence coercion.
+
+    Hard-assignment EM for :class:`HmmMV`. Each iteration runs Viterbi
+    decoding on every sequence, reassigns observations to the decoded
+    state, then refits emission distributions via unweighted ``fit()``.
+    Terminates when no state assignment changes, or when ``max_iterations``
+    is reached.
+
+    Recommended workflow::
+
+        kmeans_init(hmm, sequences)           # data-driven initialisation
+        skm = MVSegmentalKMeansTrainer(hmm, sequences)
+        skm.train()                           # fast hard-EM convergence
+        bwt = MVBaumWelchTrainer(hmm, sequences)
+        bwt.train()                           # soft-EM refinement
+
+    Args:
+        hmm: The :class:`HmmMV` to train.  Mutated in place.
+        sequences: Iterable of 2-D array-like sequences, each shape ``(T_i, D)``.
+        max_iterations: Hard cap on iterations (default 100).
+            :attr:`is_terminated` is ``True`` only on genuine convergence.
+
+    Note:
+        The HMM must outlive this object (nanobind keep-alive enforced
+        at the C++ layer).
+    """
+
+    def __init__(self, hmm: HmmMV, sequences, max_iterations: int = 100):
+        super().__init__(hmm, _as_mv_sequence_list(sequences), int(max_iterations))
+
+
 def kmeans_init(hmm: HmmMV, sequences, seed: int = 42) -> None:
     """Initialise a multivariate HMM's emission distributions via k-means++.
 
@@ -683,6 +721,7 @@ __all__ = [
     "MVBaumWelchTrainer",
     "MVEmissionDistribution",
     "MVForwardBackwardCalculator",
+    "MVSegmentalKMeansTrainer",
     "count_free_parameters_mv",
     "from_json_mv",
     "kmeans_init",

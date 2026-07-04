@@ -111,6 +111,8 @@ extern template class libhmm::BasicMapBaumWelchTrainer<double>;
 extern template class libhmm::BasicMapBaumWelchTrainer<libhmm::ObservationVectorView>;
 extern template class libhmm::BasicViterbiTrainer<double>;
 extern template class libhmm::BasicViterbiTrainer<libhmm::ObservationVectorView>;
+extern template class libhmm::BasicSegmentalKMeansTrainer<double>;
+extern template class libhmm::BasicSegmentalKMeansTrainer<libhmm::ObservationVectorView>;
 
 #include "_common.h"
 
@@ -347,9 +349,18 @@ struct ViterbiHolder {
 struct SegmentalKMeansHolder {
     std::unique_ptr<ObservationLists> data_;
     SegmentalKMeansTrainer             trainer_;
-    SegmentalKMeansHolder(Hmm& hmm, ObservationLists obs)
+    SegmentalKMeansHolder(Hmm& hmm, ObservationLists obs, std::size_t max_iters = 100)
         : data_(std::make_unique<ObservationLists>(std::move(obs)))
-        , trainer_(hmm, *data_) {}
+        , trainer_(hmm, *data_, max_iters) {}
+};
+
+using MVSKMTrainer = BasicSegmentalKMeansTrainer<ObservationVectorView>;
+struct MVSegmentalKMeansHolder {
+    std::unique_ptr<MultiObservationLists> data_;
+    MVSKMTrainer                           trainer_;
+    MVSegmentalKMeansHolder(HmmMV& hmm, MultiObservationLists obs, std::size_t max_iters = 100)
+        : data_(std::make_unique<MultiObservationLists>(std::move(obs)))
+        , trainer_(hmm, *data_, max_iters) {}
 };
 
 using MVBWT = BasicBaumWelchTrainer<ObservationVectorView>;
@@ -740,12 +751,14 @@ void bind_trainers(nb::module_ &m) {
     nb::class_<SegmentalKMeansHolder>(m, "SegmentalKMeansTrainer")
         .def(
             "__init__",
-            [](SegmentalKMeansHolder *self, Hmm &h, const nb::list &sequences) {
+            [](SegmentalKMeansHolder *self, Hmm &h, const nb::list &sequences,
+               std::size_t max_iterations) {
                 auto obs = observation_lists_from_python(sequences);
-                new (self) SegmentalKMeansHolder(h, std::move(obs));
+                new (self) SegmentalKMeansHolder(h, std::move(obs), max_iterations);
             },
             nb::arg("hmm"),
             nb::arg("sequences"),
+            nb::arg("max_iterations") = std::size_t{100},
             nb::keep_alive<1, 2>())
         .def("train",
              [](SegmentalKMeansHolder &h) {
@@ -1192,6 +1205,29 @@ void bind_mv_trainers(nb::module_ &m) {
                      },
                      "Total E-step log-probability from the last train() call. "
                      "-inf before train() is called or if all sequences had zero probability.");
+
+    nb::class_<MVSegmentalKMeansHolder>(m, "MVSegmentalKMeansTrainer")
+        .def("__init__",
+             [](MVSegmentalKMeansHolder *self, HmmMV &h, const nb::list &sequences,
+                std::size_t max_iterations) {
+                 auto lists = multi_obs_lists_from_python(sequences);
+                 new (self) MVSegmentalKMeansHolder(h, std::move(lists), max_iterations);
+             },
+             nb::arg("hmm"),
+             nb::arg("sequences"),
+             nb::arg("max_iterations") = std::size_t{100},
+             nb::keep_alive<1, 2>())
+        .def("train",
+             [](MVSegmentalKMeansHolder &h) {
+                 nb::gil_scoped_release release;
+                 h.trainer_.train();
+             })
+        .def_prop_ro("is_terminated",
+                     [](const MVSegmentalKMeansHolder &h) {
+                         return h.trainer_.isTerminated();
+                     },
+                     "True if the last train() call converged (no assignment change). "
+                     "False if max_iterations was reached without convergence.");
 
     m.def("kmeans_init",
           [](HmmMV &hmm, const nb::list &sequences, uint64_t seed) {
