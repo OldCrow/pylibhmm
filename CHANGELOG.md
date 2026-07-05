@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.9.2 (2026-07-04)
+
+### Changed
+- **CI Python matrix updated to 3.12–3.14**: drops 3.11 (past SPEC 0 42-month
+  window as of April 2026; security-only since October 2025) and adds 3.14
+  (released October 2025). Wheel builds also drop cp311 via `CIBW_SKIP`.
+  `requires-python = ">=3.11"` is retained for one more cycle.
+
+### Added
+- **ASan CI job** (Finding 2, pylibhmm half): builds the extension with
+  `-fsanitize=address` and runs pytest under ASan via `LD_PRELOAD` on Linux.
+  `detect_leaks=0` suppresses CPython false positives. Would have caught the
+  calculator UAF (Finding 1) at the extension layer.
+
+### Build
+- **`LIBHMM_PORTABLE=ON` in `wheels.yml`** (Finding 9, pylibhmm half): sets
+  `CIBW_CONFIG_SETTINGS: cmake.define.LIBHMM_PORTABLE=ON` so cibuildwheel
+  passes the portable baseline ISA flag to libhmm's SIMD TUs. Tier-2
+  runtime-dispatched kernels are unaffected.
+- Pinned libhmm FetchContent fallback to `v4.2.4`, which adds `LIBHMM_PORTABLE`,
+  the ASan CI job, E-step deduplication, and per-state observation copy
+  elimination.
+
+---
+
 ## v0.9.1 (2026-07-04)
 
 ### Fixed

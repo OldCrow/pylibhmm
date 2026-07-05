@@ -58,10 +58,16 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs_linux }}
           # Windows: x86_64 only
           CIBW_ARCHS_WINDOWS: "AMD64"
-          # Skip PyPy, musllinux, and older Pythons
-          CIBW_SKIP: "*-musllinux_* cp39-* cp310-*"
+          # Skip PyPy, musllinux, and older Pythons (SPEC 0: 3.11 past 42-month window)
+          CIBW_SKIP: "*-musllinux_* cp39-* cp310-* cp311-*"
           # Build frontend
           CIBW_BUILD_FRONTEND: "pip"
+          # LIBHMM_PORTABLE=ON: swap -march=native for a portable baseline ISA
+          # on LIBHMM_SIMD_SOURCES TUs so wheels do not SIGILL on machines with
+          # a lower ISA than the build host.  Tier-2 runtime-dispatched kernels
+          # (DoubleVecOps) are unaffected and still dispatch at full speed.
+          # See libhmm issue #58 for the plan to extend tier-2 to these TUs.
+          CIBW_CONFIG_SETTINGS: "cmake.define.LIBHMM_PORTABLE=ON"
           # Test the built wheel
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest {project}/tests -q"

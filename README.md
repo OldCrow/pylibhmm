@@ -111,7 +111,7 @@ pytest
 
 ## Dependency strategy
 
-`pylibhmm` prefers a local sibling `../libhmm` source tree if present. If not found, CMake falls back to `FetchContent` for `libhmm` tag `v4.2.3`.
+`pylibhmm` prefers a local sibling `../libhmm` source tree if present. If not found, CMake falls back to `FetchContent` for `libhmm` tag `v4.2.4`.
 
 ## Notes on wheel portability
 
