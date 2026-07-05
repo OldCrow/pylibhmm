@@ -51,31 +51,27 @@ jobs:
 
       - name: Build extension with ASan (libhmm + extension both instrumented)
         run: |
-          # CMAKE_CXX_FLAGS propagates to the libhmm add_subdirectory build, so
-          # all C++ code in the call stack (libhmm + _core.cpp) is uniformly
-          # ASan-instrumented.  Without this, C++ exception unwinding from
-          # uninstrumented libhmm frames into instrumented _core.cpp frames
-          # triggers spurious ASan aborts.
+          # CMAKE_CXX_FLAGS propagates to the libhmm add_subdirectory build so
+          # the entire C++ call stack is uniformly ASan-instrumented.  Do NOT
+          # set CMAKE_SHARED_LINKER_FLAGS: GCC already links libasan.so
+          # automatically via -fsanitize=address; double-specifying causes
+          # conflicts at dlopen time.
           pip install ".[test]" \
-            -Ccmake.define.CMAKE_CXX_FLAGS="-fsanitize=address -g -O1 -fno-omit-frame-pointer" \
-            -Ccmake.define.CMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
+            -Ccmake.define.CMAKE_CXX_FLAGS="-fsanitize=address -g -O1 -fno-omit-frame-pointer"
 
       - name: Run tests under ASan
         run: |
           LIBASAN=$(gcc -print-file-name=libasan.so)
-          # LD_PRELOAD is required: without it, Python's process lays out virtual
-          # memory before the extension loads, and ASan cannot map its shadow
-          # memory on top of the existing layout.
-          #
-          # -k 'not invalid': tests that exercise C++ exception propagation
-          # (test_invalid_sigma, test_invalid, etc.) abort the process under
-          # LD_PRELOAD ASan because the C++ unwinder crosses the
-          # instrumented/non-instrumented boundary at CPython's frames.  This is
-          # a fundamental limitation of testing a mixed ASan/non-ASan process.
-          # These tests are fully exercised by the standard 3x3 CI matrix.
-          # The ASan job targets memory bugs in computation paths (UAF, heap
-          # corruption) — which it catches cleanly with libhmm also instrumented.
-          LD_PRELOAD=$LIBASAN \
+          LIBSTDCXX=$(gcc -print-file-name=libstdc++.so.6)
+          # Root cause of previous failures: libasan.so is a DT_NEEDED of
+          # _core.so, so when LD_PRELOAD loads libasan first, libstdc++ is not
+          # yet loaded.  ASan's __cxa_throw interceptor gets
+          # real___cxa_throw = nullptr, causing CHECK failed in
+          # asan_interceptors.cpp:320 on any C++ exception.
+          # Fix: preload libstdc++ before libasan so the real symbol is resolved
+          # before ASan wraps it.  verify_asan_link_order=0 suppresses the
+          # "ASan runtime does not come first" warning that follows.
+          LD_PRELOAD="$LIBSTDCXX $LIBASAN" \
             PYTHONMALLOC=malloc \
-            ASAN_OPTIONS=detect_leaks=0:alloc_dealloc_mismatch=0 \
-            pytest tests -v --tb=short -k "not invalid"
+            ASAN_OPTIONS=detect_leaks=0:alloc_dealloc_mismatch=0:verify_asan_link_order=0 \
+            pytest tests -v --tb=short
