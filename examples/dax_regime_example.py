@@ -42,6 +42,7 @@ import sys
 import time
 
 import numpy as np
+
 import pylibhmm
 
 
@@ -153,7 +154,7 @@ def run_regime_hmm(returns: np.ndarray, label: str,
     print(f"  BIC  = {mc.bic:.1f}")
     print(f"  AICc = {mc.aicc:.1f}")
 
-    print(f"\n=== pylibhmm vs fHMM (R) ===\n")
+    print("\n=== pylibhmm vs fHMM (R) ===\n")
     print(f"{'':>20} {'pylibhmm':>12} {'fHMM':>10}")
     print("-" * 44)
     print(f"{'Log-likelihood':>20} {final_ll:>12.1f} {ref_ll:>10.1f}")

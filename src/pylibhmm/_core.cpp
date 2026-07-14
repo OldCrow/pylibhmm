@@ -341,7 +341,7 @@ struct MapBaumWelchHolder {
 struct ViterbiHolder {
     std::unique_ptr<ObservationLists> data_;
     ViterbiTrainer                    trainer_;
-    ViterbiHolder(Hmm& hmm, ObservationLists obs, TrainingConfig cfg = {})
+    ViterbiHolder(Hmm& hmm, ObservationLists obs, const TrainingConfig& cfg = {})
         : data_(std::make_unique<ObservationLists>(std::move(obs)))
         , trainer_(hmm, *data_, cfg) {}
 };

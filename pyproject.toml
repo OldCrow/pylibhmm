@@ -22,3 +22,19 @@ editable.mode = "redirect"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--basetemp=./.pytest_tmp"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# "B" (flake8-bugbear) is deliberately deferred: it surfaces 5 B017
+# ("do not assert blind exception") findings in tests/ that need a real
+# decision on the exact exception type each binding raises, not a
+# mechanical fix. Adopt B once those are triaged.
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Stub files keep idiomatic single-line signatures; wrapping them for a
+# line-length rule would hurt readability of the API surface, not help it.
+"*.pyi" = ["E501"]

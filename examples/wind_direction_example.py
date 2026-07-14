@@ -47,6 +47,7 @@ import sys
 import time
 
 import numpy as np
+
 import pylibhmm
 
 data_dir = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
@@ -118,7 +119,7 @@ def to_deg(r: float) -> float:
 dc = hmm.get_distribution(conc)
 dd = hmm.get_distribution(disp)
 
-print(f"\n=== pylibhmm results ===")
+print("\n=== pylibhmm results ===")
 print(f"Wall time: {wall_ms:.1f} ms\n")
 print(f"State {conc} (prevailing):  mu={dc.mu:.4f} rad ({to_deg(dc.mu):.1f}°)"
       f"  kappa={dc.kappa:.4f}  circ_var={dc.circular_variance:.4f}")

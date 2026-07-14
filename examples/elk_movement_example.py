@@ -45,11 +45,11 @@ Michelot T, Langrock R, Patterson TA (2016). moveHMM: an R package for
 """
 
 import glob
-import math
 import sys
 import time
 
 import numpy as np
+
 import pylibhmm
 
 data_dir = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
@@ -220,7 +220,7 @@ wall_ms = (time.perf_counter() - t0) * 1000
 # ---------------------------------------------------------------------------
 enc, trav = (0, 1) if gamma_dists[0].mean < gamma_dists[1].mean else (1, 0)
 
-print(f"\n=== pylibhmm results ===")
+print("\n=== pylibhmm results ===")
 print(f"Wall time: {wall_ms:.0f} ms\n")
 for idx, lbl in [(enc, "encamped  "), (trav, "travelling")]:
     g, v = gamma_dists[idx], vm_dists[idx]
@@ -232,7 +232,7 @@ for row in A:
     print("  [" + "  ".join(f"{v:8.5f}" for v in row) + " ]")
 print(f"\nLog-likelihood: {prev_ll:.1f}")
 
-print(f"\n=== Comparison: pylibhmm vs moveHMM (R) ===\n")
+print("\n=== Comparison: pylibhmm vs moveHMM (R) ===\n")
 print(f"{'':>26} {'pylibhmm':>10} {'moveHMM':>12}")
 print("-" * 50)
 ge, ve = gamma_dists[enc],  vm_dists[enc]

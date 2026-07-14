@@ -328,7 +328,6 @@ class TestVonMises:
 
     def test_pdf_at_mean(self):
         # PDF is maximised at x == mu
-        import math
         d = pylibhmm.VonMises(mu=0.0, kappa=2.0)
         peak = d.pdf(0.0)
         assert peak > d.pdf(1.0)

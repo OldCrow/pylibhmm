@@ -27,6 +27,7 @@ Harte D (2025). HiddenMarkov: Hidden Markov Models. CRAN.
 import time
 
 import numpy as np
+
 import pylibhmm
 
 # Annual major earthquake counts 1900–2006 (Zucchini & MacDonald Table 1.1)
@@ -88,7 +89,7 @@ lam_lo = hmm.get_distribution(lo).lam
 lam_hi = hmm.get_distribution(hi).lam
 T = hmm.get_trans()
 
-print(f"\n=== pylibhmm results ===")
+print("\n=== pylibhmm results ===")
 print(f"Wall time: {wall_ms:.1f} ms\n")
 print(f"State {lo} (low  seismicity): λ = {lam_lo:.4f}")
 print(f"State {hi} (high seismicity): λ = {lam_hi:.4f}\n")
@@ -115,7 +116,7 @@ print(f"  AIC  = {mc.aic:.3f}")
 print(f"  BIC  = {mc.bic:.3f}")
 print(f"  AICc = {mc.aicc:.3f}")
 
-print(f"\n=== Comparison: pylibhmm vs HiddenMarkov (R) ===\n")
+print("\n=== Comparison: pylibhmm vs HiddenMarkov (R) ===\n")
 print(f"{'':>22} {'pylibhmm':>12} {'HiddenMarkov':>14}")
 print("-" * 50)
 print(f"{'λ low':>22} {lam_lo:>12.4f} {15.418:>14.3f}")

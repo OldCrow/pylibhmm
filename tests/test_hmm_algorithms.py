@@ -1,6 +1,6 @@
 """Tests for HMM algorithm, calculator, and trainer bindings."""
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest
