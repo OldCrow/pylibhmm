@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.3 (2026-07-19)
+
+### Build
+- Pinned libhmm FetchContent fallback to `v4.2.5`, a license-hygiene release
+  that reimplements libhmm's incomplete gamma/beta and inverse-erf special
+  functions from public-domain references (Abramowitz & Stegun, NIST DLMF,
+  Lentz, Winitzki) instead of Numerical Recipes. No API or behavior change;
+  numerical results are identical.
+
+---
+
 ## v0.9.2 (2026-07-04)
 
 ### Changed

@@ -83,13 +83,13 @@ Last reconciled against live GitHub state: 2026-07-14.
   No periodic check currently exists for this. Tracked as GitHub issue #15.
 
 ## Cross-Repo Dependencies [OPEN]
-Pins libhmm via FetchContent at `v4.2.4` (`CMakeLists.txt`). Verified
-2026-07-14: this is libhmm's actual current release tag (libhmm `main` is
-1 docs-only commit ahead of `v4.2.4`, not a new release) — the pin is
-current, not stale. When libhmm cuts a new release, this pin must be
-bumped deliberately — check libhmm's PLAN.md/AGENTS.md for its current
-version before assuming this one is still current. Verify sync explicitly
-on any machine that builds from the FetchContent path alone (no local
+Pins libhmm via FetchContent at `v4.2.5` (`CMakeLists.txt`). Bumped
+2026-07-19 from `v4.2.4` to track libhmm's v4.2.5 license-hygiene release
+(special functions reimplemented from public-domain references, no API or
+behavior change). When libhmm cuts a new release, this pin must be bumped
+deliberately — check libhmm's PLAN.md/AGENTS.md for its current version
+before assuming this one is still current. Verify sync explicitly on any
+machine that builds from the FetchContent path alone (no local
 `../libhmm` checkout), rather than relying on the local-preference path,
 which won't surface a stale pin. See GitHub issue #15 for the periodic
 check to catch drift.
