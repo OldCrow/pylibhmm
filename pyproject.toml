@@ -8,7 +8,7 @@ version = "0.9.3"
 description = "Python bindings for libhmm v4 — scalar and multivariate HMMs with NumPy-friendly distributions"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = ["numpy>=1.22"]
 
 [project.optional-dependencies]
@@ -25,7 +25,7 @@ addopts = "--basetemp=./.pytest_tmp"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 # "B" (flake8-bugbear) is deliberately deferred: it surfaces 5 B017

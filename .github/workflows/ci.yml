@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   pull_request:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
+  # Monthly canary: catches drift with no code change to trigger it (Python
+  # release cycle, runner image rolls) instead of discovering breakage at
+  # the next real push.
+  schedule:
+    - cron: '20 3 1 * *'
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -14,15 +24,27 @@ jobs:
   build-and-test:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.12", "3.13", "3.14"]
+        # All 3 Python versions on Linux (cheap); macOS/Windows only test the
+        # oldest+newest supported version — the version axis rarely diverges
+        # by OS for a nanobind extension, and macOS/Windows runners cost
+        # 10x/2x Linux minutes on private repos.
+        include:
+          - { os: ubuntu-latest,  python: "3.12" }
+          - { os: ubuntu-latest,  python: "3.13" }
+          - { os: ubuntu-latest,  python: "3.14" }
+          - { os: macos-latest,   python: "3.12" }
+          - { os: macos-latest,   python: "3.14" }
+          - { os: windows-latest, python: "3.12" }
+          - { os: windows-latest, python: "3.14" }
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python }}
 
@@ -33,33 +55,36 @@ jobs:
         run: pytest tests -v --tb=short
 
   # ---------------------------------------------------------------------------
-  # AddressSanitizer — builds the extension with -fsanitize=address and runs
-  # pytest under ASan via LD_PRELOAD.  Linux/GCC only: macOS ASan for Python
+  # ASan+UBSan run together in this one job (same runner, no extra cost) —
+  # builds the extension with -fsanitize=address,undefined and runs pytest
+  # under both via LD_PRELOAD.  Linux/GCC only: macOS ASan for Python
   # extensions requires DYLD_INSERT_LIBRARIES and SIP workarounds.
   # detect_leaks=0: CPython's memory allocator produces false positives.
   # Would have caught the calculator UAF (Finding 1) in the extension layer.
   # ---------------------------------------------------------------------------
   asan:
-    name: ASan (ubuntu / Python 3.12)
+    name: ASan/UBSan (ubuntu / Python 3.12)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
-      - name: Build extension with ASan (libhmm + extension both instrumented)
+      - name: Build extension with ASan+UBSan (libhmm + extension both instrumented)
         run: |
           # CMAKE_CXX_FLAGS propagates to the libhmm add_subdirectory build so
-          # the entire C++ call stack is uniformly ASan-instrumented.  Do NOT
-          # set CMAKE_SHARED_LINKER_FLAGS: GCC already links libasan.so
+          # the entire C++ call stack is uniformly ASan/UBSan-instrumented.  Do
+          # NOT set CMAKE_SHARED_LINKER_FLAGS: GCC already links libasan.so
           # automatically via -fsanitize=address; double-specifying causes
           # conflicts at dlopen time.
           pip install ".[test]" \
-            -Ccmake.define.CMAKE_CXX_FLAGS="-fsanitize=address -g -O1 -fno-omit-frame-pointer"
+            -Ccmake.define.CMAKE_CXX_FLAGS="-fsanitize=address,undefined -g -O1 -fno-omit-frame-pointer"
 
-      - name: Run tests under ASan
+      - name: Run tests under ASan+UBSan
         run: |
           LIBASAN=$(gcc -print-file-name=libasan.so)
           LIBSTDCXX=$(gcc -print-file-name=libstdc++.so.6)
@@ -74,4 +99,5 @@ jobs:
           LD_PRELOAD="$LIBSTDCXX $LIBASAN" \
             PYTHONMALLOC=malloc \
             ASAN_OPTIONS=detect_leaks=0:alloc_dealloc_mismatch=0:verify_asan_link_order=0 \
+            UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
             pytest tests -v --tb=short
