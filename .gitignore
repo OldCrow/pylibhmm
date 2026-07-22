@@ -12,6 +12,7 @@ venv/
 build/
 dist/
 wheelhouse/
+CMakeUserPresets.json
 *.egg-info/
 .idea/
 .vscode/

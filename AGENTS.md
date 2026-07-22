@@ -113,6 +113,18 @@ python -m pip install -e ".[test]"
 python -m pytest tests -v --tb=short
 ```
 
+### CMake standard
+
+Full rules: `CMAKE-HOUSE-STYLE.md` in the Development root on dev machines (master copy, not checked in); this section is self-sufficient for this repo. pylibhmm is built via
+scikit-build-core (the `pip install -e` path above is primary and
+authoritative); `CMakePresets.json` (schema 6, min CMake 3.25) exists only
+for direct-CMake dev/debugging (e.g. exercising the extension module build
+outside pip): `release` → `build/`, `debug` → `build-debug/`. No project
+extras, no `generator` field. Deviation: prefers a local `../libhmm`
+sibling checkout over the pinned FetchContent tag (`v4.2.5`) when present —
+dev-loop speed; the FetchContent pin is what's exercised on machines
+without the sibling (e.g. CI).
+
 ## Platform-Specific Notes
 
 ### macOS (non-Catalina)
@@ -180,7 +192,7 @@ foreach ($line in $envVars) {
   - Build Tools default path: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\`
   - Full VS default path: `C:\Program Files\Microsoft Visual Studio\2022\{edition}\`
 - **Smart App Control must be Off** (Windows Security → App & Browser Control → SAC settings). SAC blocks locally compiled executables and cannot be re-enabled without a Windows reset.
-- CMake ≥ 3.20: https://cmake.org/download/, `winget install Kitware.CMake`, or `choco install cmake`.
+- CMake ≥ 3.25: https://cmake.org/download/, `winget install Kitware.CMake`, or `choco install cmake`.
 
 ## Coding Conventions
 

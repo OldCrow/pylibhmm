@@ -4,7 +4,7 @@
 
 - Python: 3.11+
 - C++: C++20 compiler
-- CMake: 3.20+
+- CMake: 3.25+
 
 ## libhmm version
 

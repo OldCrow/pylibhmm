@@ -93,7 +93,7 @@ hmm2 = pylibhmm.load_json_mv("model_mv.json")
 Prerequisites:
 
 - Python 3.11+
-- CMake 3.20+
+- CMake 3.25+
 - C++20 compiler
 
 Install locally:
