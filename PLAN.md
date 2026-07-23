@@ -94,6 +94,16 @@ machine that builds from the FetchContent path alone (no local
 which won't surface a stale pin. See GitHub issue #15 for the periodic
 check to catch drift.
 
+## Build-Stack Standardization (2026-07-23) [DERIVED]
+Cross-repo effort tracked in `~/Development/BUILD-STANDARDIZATION-PLAN.md`.
+Commits: `7e6db1d` (minimal CMakePresets.json, CMake minimum bumped to
+3.25), `7a06b42` (local-source path adopts libhmm's `LIBHMM_*` option
+names — coordinated with libhmm `8b0b6f7`; the local path now forces
+nothing, relying on libhmm's `PROJECT_IS_TOP_LEVEL` defaults, while the
+`FetchContent` path keeps forcing the old unprefixed names off until the
+v4.2.5 pin bumps past libhmm's rename). AGENTS.md's "Dependency resolution
+order" section updated to match.
+
 ## Next Steps
 - #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
 - #13 Run the deferred `ruff format` pass as its own reviewable change.

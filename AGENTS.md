@@ -32,12 +32,20 @@ compiles `src/pylibhmm/_core.cpp` and links it against libhmm's
 
 ### Dependency resolution order
 `CMakeLists.txt` prefers a local `../libhmm` checkout when
-`../libhmm/CMakeLists.txt` exists (added via `add_subdirectory`, with
-libhmm's own `BUILD_*`/`ENABLE_*` options forced `OFF`); otherwise it
-fetches the pinned release tag via `FetchContent`. This has a real
-consequence: the `FetchContent` pin only actually gets exercised (and so
-only gets a chance to be caught if stale) on a machine with no local
-`../libhmm` checkout — see PLAN.md Known Gaps.
+`../libhmm/CMakeLists.txt` exists (added via `add_subdirectory`); otherwise
+it fetches the pinned release tag via `FetchContent`. The two paths handle
+libhmm's build options differently: the local path forces nothing — it
+relies on libhmm's own `LIBHMM_BUILD_EXAMPLES`/`LIBHMM_BUILD_TESTS`/
+`LIBHMM_BUILD_TOOLS` defaulting to `PROJECT_IS_TOP_LEVEL` (i.e. `OFF` when
+embedded via `add_subdirectory`) since libhmm's target-first refactor. The
+`FetchContent` path still force-sets the old unprefixed names
+(`BUILD_EXAMPLES`, `BUILD_TESTS`, `BUILD_TOOLS`, `BUILD_BENCHMARKS`,
+`ENABLE_STATIC_ANALYSIS`, `ENABLE_CLANG_TIDY`, `ENABLE_CPPCHECK`) `OFF`,
+because it pins libhmm v4.2.5, which predates the `LIBHMM_*` rename; this
+is removed once the pin bumps past the rename. This has a real consequence:
+the `FetchContent` pin only actually gets exercised (and so only gets a
+chance to be caught if stale) on a machine with no local `../libhmm`
+checkout — see PLAN.md Known Gaps.
 
 ### `_common.h` — NumPy ⇔ libhmm conversion
 Conversions are copy-based by default: NumPy input arrays are copied
