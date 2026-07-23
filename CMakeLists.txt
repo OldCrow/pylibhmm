@@ -17,13 +17,9 @@ set(_pylibhmm_libhmm_target "")
 set(_pylibhmm_libhmm_include_dir "")
 if(EXISTS "${PYLIBHMM_LOCAL_LIBHMM_SOURCE}/CMakeLists.txt")
     message(STATUS "Using local libhmm source: ${PYLIBHMM_LOCAL_LIBHMM_SOURCE}")
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-    set(BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_STATIC_ANALYSIS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_CLANG_TIDY OFF CACHE BOOL "" FORCE)
-    set(ENABLE_CPPCHECK OFF CACHE BOOL "" FORCE)
+    # libhmm's LIBHMM_BUILD_EXAMPLES/LIBHMM_BUILD_TESTS/LIBHMM_BUILD_TOOLS default
+    # to PROJECT_IS_TOP_LEVEL as of its target-first refactor, so add_subdirectory
+    # here already gets library-only by default — no forced-OFF lines needed.
     add_subdirectory("${PYLIBHMM_LOCAL_LIBHMM_SOURCE}"
                      "${CMAKE_BINARY_DIR}/_deps/libhmm-build"
                      EXCLUDE_FROM_ALL)
@@ -37,6 +33,12 @@ else()
         GIT_REPOSITORY https://github.com/OldCrow/libhmm.git
         GIT_TAG        v4.2.5
     )
+    # v4.2.5 predates libhmm's LIBHMM_-prefixed option rename and does not
+    # default component toggles off PROJECT_IS_TOP_LEVEL — force the old
+    # unprefixed spellings OFF here. REMOVE these seven lines (and switch to
+    # relying on libhmm's PROJECT_IS_TOP_LEVEL defaults, as the local-source
+    # branch above already does) the next time GIT_TAG is bumped past the
+    # libhmm release that lands the rename.
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
