@@ -72,4 +72,11 @@ if(WIN32)
     target_compile_definitions(_core PRIVATE NOMINMAX _USE_MATH_DEFINES)
 endif()
 
+if(MSVC)
+    # Docstrings in _core.cpp use Unicode math symbols (e.g. γ, −) via
+    # universal character names; without /utf-8, MSVC narrows them to the
+    # current code page (cp1252) and warns C4566 for symbols outside that set.
+    target_compile_options(_core PRIVATE /utf-8)
+endif()
+
 install(TARGETS _core LIBRARY DESTINATION pylibhmm)
