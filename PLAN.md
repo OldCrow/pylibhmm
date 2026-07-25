@@ -19,7 +19,7 @@
   Verified clean as of 2026-07-14.
 
 ## GitHub Synchronization [DERIVED]
-Last reconciled against live GitHub state: 2026-07-14.
+Last reconciled against live GitHub state: 2026-07-24.
 - GitHub is the collaborator-facing source for issues and milestones; this
   PLAN.md is the agent-facing durable project state. Keep both in sync.
 - When creating, closing, reopening, retitling, or moving a GitHub issue or
@@ -41,14 +41,14 @@ Last reconciled against live GitHub state: 2026-07-14.
 - None currently exist in this repository (checked 2026-07-14).
 
 ## GitHub Issues Without Milestone [DERIVED]
-- Open issues: 5 as of 2026-07-14 (all opened this session from the
-  tooling-setup pass's Known Gaps, none assigned a milestone yet):
+- Open issues: 4 as of 2026-07-24 (opened in the tooling-setup pass
+  from its Known Gaps, none assigned a milestone yet):
   - #12 Wire ruff check and lint-cpp.sh into CI
   - #13 Run deferred ruff format pass across Python surface
   - #14 Triage B017 blind-exception test assertions, then enable ruff B rule
-  - #15 Periodic check for stale libhmm FetchContent pin
   - #16 Adopt mypy: annotate __init__.py wrapper surface
-- Closed issues: 4 as of 2026-07-14 (fetch via
+- Closed issues: 5 as of 2026-07-24 (#15 closed — pin-currency CI job
+  implemented, see Cross-Repo Dependencies; fetch full list via
   `gh issue list --state closed --json number,title,milestone -q
   '.[] | select(.milestone == null)'` if ever needed).
 
@@ -76,11 +76,12 @@ Last reconciled against live GitHub state: 2026-07-14.
 - Neither `ruff check` nor `scripts/lint-cpp.sh` are wired into CI yet
   (`.github/workflows/ci.yml` only runs pytest + ASan) — no decision
   recorded on when to add them. Tracked as GitHub issue #12.
-- Stale FetchContent pin risk: this repo prefers a local `../libhmm`
-  checkout when present, meaning the FetchContent pin can silently drift
-  out of date on any machine that always has a fresh local libhmm
-  alongside it — the fetched path never gets exercised there to catch it.
-  No periodic check currently exists for this. Tracked as GitHub issue #15.
+- Stale FetchContent pin risk: **closed 2026-07-24** (issue #15). This
+  repo prefers a local `../libhmm` checkout when present, so the pin could
+  silently drift on any machine that always has a fresh local libhmm
+  alongside it. Now caught mechanically by the `pin-currency` canary job —
+  see Cross-Repo Dependencies. Retained here as a record of why the check
+  exists, not as an open gap.
 
 ## Cross-Repo Dependencies [OPEN]
 Pins libhmm via `FetchContent` at the `GIT_TAG` in `CMakeLists.txt` —
@@ -119,5 +120,4 @@ order" section updated to match.
 - #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
 - #13 Run the deferred `ruff format` pass as its own reviewable change.
 - #14 Triage the 5 `B017` blind-exception test assertions, then enable `B`.
-- #15 Implement a periodic check for the libhmm FetchContent pin.
 - #16 Annotate `__init__.py` and adopt mypy.
