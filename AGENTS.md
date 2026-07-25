@@ -41,8 +41,10 @@ embedded via `add_subdirectory`) since libhmm's target-first refactor. The
 `FetchContent` path still force-sets the old unprefixed names
 (`BUILD_EXAMPLES`, `BUILD_TESTS`, `BUILD_TOOLS`, `BUILD_BENCHMARKS`,
 `ENABLE_STATIC_ANALYSIS`, `ENABLE_CLANG_TIDY`, `ENABLE_CPPCHECK`) `OFF`,
-because it pins libhmm v4.2.5, which predates the `LIBHMM_*` rename; this
-is removed once the pin bumps past the rename. This has a real consequence:
+because the pinned tag predates the `LIBHMM_*` rename; this is removed
+once the pin bumps past the rename. (The pin value itself lives only in
+`CMakeLists.txt`'s `GIT_TAG` — never restated in docs; see PLAN.md
+Cross-Repo Dependencies.) This has a real consequence:
 the `FetchContent` pin only actually gets exercised (and so only gets a
 chance to be caught if stale) on a machine with no local `../libhmm`
 checkout — see PLAN.md Known Gaps.
@@ -129,7 +131,7 @@ authoritative); `CMakePresets.json` (schema 6, min CMake 3.25) exists only
 for direct-CMake dev/debugging (e.g. exercising the extension module build
 outside pip): `release` → `build/`, `debug` → `build-debug/`. No project
 extras, no `generator` field. Deviation: prefers a local `../libhmm`
-sibling checkout over the pinned FetchContent tag (`v4.2.5`) when present —
+sibling checkout over the pinned FetchContent tag when present —
 dev-loop speed; the FetchContent pin is what's exercised on machines
 without the sibling (e.g. CI).
 
@@ -137,7 +139,7 @@ without the sibling (e.g. CI).
 
 ### macOS (non-Catalina)
 
-- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` `v4.2.5` via FetchContent.
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` at the pinned `GIT_TAG` (see `CMakeLists.txt`) via FetchContent.
 - Ensure the active Python and `libhmm` build target the same architecture.
 
 ```bash
@@ -153,7 +155,7 @@ python -m pytest tests -v --tb=short
 ### Linux
 
 - Requires GCC ≥ 12 or Clang ≥ 14 for C++20 support.
-- If `libhmm` is not found locally, CMake fetches it automatically at v4.2.5.
+- If `libhmm` is not found locally, CMake fetches it automatically at the pinned `GIT_TAG` (see `CMakeLists.txt`).
 
 ```bash
 python -m pip install -e ".[test]" -Ccmake.build-type=Release

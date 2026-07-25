@@ -8,10 +8,13 @@ on:
     branches: [main]
     paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   # Monthly canary: catches drift with no code change to trigger it (Python
-  # release cycle, runner image rolls) instead of discovering breakage at
-  # the next real push.
+  # release cycle, runner image rolls, stale libhmm pin) instead of
+  # discovering breakage at the next real push.
   schedule:
     - cron: '20 3 1 * *'
+  # Lets the canary-only jobs (pin-currency) be run on demand without
+  # waiting for the monthly cron.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -101,3 +104,61 @@ jobs:
             ASAN_OPTIONS=detect_leaks=0:alloc_dealloc_mismatch=0:verify_asan_link_order=0 \
             UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
             pytest tests -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # pin-currency — canary-only (monthly cron / manual dispatch), not on push
+  # or PR: this asks "is the pin still the RIGHT tag?", which is a different
+  # question from "does the pinned tag still build?".  The latter is already
+  # covered on every run, because CI has no ../libhmm sibling and so always
+  # takes the FetchContent branch.  Nothing covered the former until now —
+  # the pin could silently fall behind a libhmm release indefinitely
+  # (GitHub issue #15).
+  #
+  # On mismatch this fails deliberately.  Bumping GIT_TAG is not mechanical:
+  # any libhmm release carrying the LIBHMM_* option rename also requires
+  # deleting the seven forced set(... FORCE) lines in the FetchContent
+  # branch of CMakeLists.txt.  See PLAN.md Cross-Repo Dependencies.
+  # ---------------------------------------------------------------------------
+  pin-currency:
+    name: libhmm pin currency (canary)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare pinned libhmm tag against newest libhmm release
+        env:
+          LIBHMM_REPO: https://github.com/OldCrow/libhmm.git
+        run: |
+          set -euo pipefail
+
+          # '|| true' on both lookups: under 'set -e' a failed command
+          # substitution aborts the step immediately, which would skip the
+          # explicit checks below and emit no actionable ::error:: message.
+          pin=$(grep -oE '^[[:space:]]*GIT_TAG[[:space:]]+v[^[:space:]]+' CMakeLists.txt \
+                | awk '{print $2}' || true)
+          if [ -z "${pin}" ]; then
+            echo "::error::could not parse GIT_TAG from CMakeLists.txt"
+            exit 1
+          fi
+
+          latest=$(git ls-remote --tags --refs "${LIBHMM_REPO}" 'v*' \
+                   | sed 's|.*refs/tags/||' | sort -V | tail -1 || true)
+          if [ -z "${latest}" ]; then
+            echo "::error::could not resolve newest libhmm tag from ${LIBHMM_REPO}"
+            exit 1
+          fi
+
+          echo "pinned: ${pin}"
+          echo "latest: ${latest}"
+
+          if [ "${pin}" != "${latest}" ]; then
+            echo "::error::libhmm pin is stale — pinned ${pin}, newest release ${latest}. \
+          Bump GIT_TAG in CMakeLists.txt; if the new tag carries the LIBHMM_* option \
+          rename, also delete the forced set(... FORCE) lines in the FetchContent branch."
+            exit 1
+          fi
+          echo "pin is current"

@@ -83,16 +83,27 @@ Last reconciled against live GitHub state: 2026-07-14.
   No periodic check currently exists for this. Tracked as GitHub issue #15.
 
 ## Cross-Repo Dependencies [OPEN]
-Pins libhmm via FetchContent at `v4.2.5` (`CMakeLists.txt`). Bumped
-2026-07-19 from `v4.2.4` to track libhmm's v4.2.5 license-hygiene release
-(special functions reimplemented from public-domain references, no API or
-behavior change). When libhmm cuts a new release, this pin must be bumped
-deliberately — check libhmm's PLAN.md/AGENTS.md for its current version
-before assuming this one is still current. Verify sync explicitly on any
-machine that builds from the FetchContent path alone (no local
-`../libhmm` checkout), rather than relying on the local-preference path,
-which won't surface a stale pin. See GitHub issue #15 for the periodic
-check to catch drift.
+Pins libhmm via `FetchContent` at the `GIT_TAG` in `CMakeLists.txt` —
+**that line is the single source of truth and the version is deliberately
+not restated in prose here or anywhere else.** Restated copies drifted
+before (libhmm's own PLAN.md carried a wrong value and a fabricated
+"lag"); the rule now is to read the tag from `CMakeLists.txt`, never from
+documentation.
+
+Currency is enforced mechanically, not by prose: the `pin-currency` job in
+the monthly CI canary compares `GIT_TAG` against libhmm's newest release
+tag and fails on mismatch (GitHub issue #15). Bumping remains a deliberate
+act — when it happens, delete the seven forced `set(... FORCE)` option
+lines in the `FetchContent` branch, since any libhmm release carrying the
+`LIBHMM_*` rename makes both dependency paths converge on
+`PROJECT_IS_TOP_LEVEL` defaults.
+
+Buildability of the pinned path is separately and continuously covered:
+CI has no `../libhmm` sibling, so every CI run already exercises
+`FetchContent`. Verified manually on macOS/AppleClang 2026-07-24 —
+configure + build + 55-symbol import against the pin, clean. Note that
+buildability and currency are different questions; CI covers the first on
+every run, the second only monthly.
 
 ## Build-Stack Standardization (2026-07-23) [DERIVED]
 Cross-repo effort tracked in `~/Development/BUILD-STANDARDIZATION-PLAN.md`.
@@ -101,7 +112,7 @@ Commits: `7e6db1d` (minimal CMakePresets.json, CMake minimum bumped to
 names — coordinated with libhmm `8b0b6f7`; the local path now forces
 nothing, relying on libhmm's `PROJECT_IS_TOP_LEVEL` defaults, while the
 `FetchContent` path keeps forcing the old unprefixed names off until the
-v4.2.5 pin bumps past libhmm's rename). AGENTS.md's "Dependency resolution
+pin bumps past libhmm's rename). AGENTS.md's "Dependency resolution
 order" section updated to match.
 
 ## Next Steps
