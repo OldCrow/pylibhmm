@@ -107,7 +107,8 @@ buildability and currency are different questions; CI covers the first on
 every run, the second only monthly.
 
 ## Build-Stack Standardization (2026-07-23) [DERIVED]
-Cross-repo effort tracked in `~/Development/BUILD-STANDARDIZATION-PLAN.md`.
+Cross-repo effort tracked in the fleet standards repo
+([record](https://github.com/OldCrow/standards/blob/main/records/BUILD-STANDARDIZATION-PLAN.md)).
 Commits: `7e6db1d` (minimal CMakePresets.json, CMake minimum bumped to
 3.25), `7a06b42` (local-source path adopts libhmm's `LIBHMM_*` option
 names — coordinated with libhmm `8b0b6f7`; the local path now forces

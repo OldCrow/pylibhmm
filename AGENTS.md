@@ -125,7 +125,8 @@ python -m pytest tests -v --tb=short
 
 ### CMake standard
 
-Full rules: `CMAKE-HOUSE-STYLE.md` in the Development root on dev machines (master copy, not checked in); this section is self-sufficient for this repo. pylibhmm is built via
+Full rules: [CMake House Style](https://github.com/OldCrow/standards/blob/main/CMAKE-HOUSE-STYLE.md)
+in the fleet standards repo; this section is self-sufficient for this repo. pylibhmm is built via
 scikit-build-core (the `pip install -e` path above is primary and
 authoritative); `CMakePresets.json` (schema 6, min CMake 3.25) exists only
 for direct-CMake dev/debugging (e.g. exercising the extension module build
@@ -239,6 +240,10 @@ bash scripts/lint-cpp.sh
 ```
 
 ## CI / Validation
+
+Fleet-wide workflow rules (runner budget, bounded parallelism, ISA hazards on
+hosted runners, action pinning):
+[CI House Style](https://github.com/OldCrow/standards/blob/main/CI-HOUSE-STYLE.md).
 
 Release checklist:
 
