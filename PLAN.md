@@ -93,11 +93,13 @@ documentation.
 
 Currency is enforced mechanically, not by prose: the `pin-currency` job in
 the monthly CI canary compares `GIT_TAG` against libhmm's newest release
-tag and fails on mismatch (GitHub issue #15). Bumping remains a deliberate
-act — when it happens, delete the seven forced `set(... FORCE)` option
-lines in the `FetchContent` branch, since any libhmm release carrying the
-`LIBHMM_*` rename makes both dependency paths converge on
-`PROJECT_IS_TOP_LEVEL` defaults.
+tag and fails on mismatch (GitHub issue #15).
+
+**Done 2026-08-16 at the libhmm v4.3.0 bump**: the seven forced
+`set(... FORCE)` option lines are deleted from the `FetchContent` branch, so
+both dependency paths now converge on libhmm's `PROJECT_IS_TOP_LEVEL`
+defaults. v4.3.0 retired the unprefixed spellings outright, so forcing them
+had become a no-op as well as unnecessary.
 
 Buildability of the pinned path is separately and continuously covered:
 CI has no `../libhmm` sibling, so every CI run already exercises
@@ -116,6 +118,40 @@ nothing, relying on libhmm's `PROJECT_IS_TOP_LEVEL` defaults, while the
 `FetchContent` path keeps forcing the old unprefixed names off until the
 pin bumps past libhmm's rename). AGENTS.md's "Dependency resolution
 order" section updated to match.
+
+## Wheel Build Contract (2026-08-16) [DERIVED]
+Settled at v0.10.0, after the shipped 0.9.2/0.9.3 declared
+`requires-python >= 3.11` while building no cp311 wheel — metadata admitted
+users the wheel set did not serve, so pip handed them the sdist and a local
+libhmm compile. Three rules, all of which failed silently before:
+
+- **The interpreter set is an ALLOWLIST** (`CIBW_BUILD`), never a denylist. A
+  denylist cannot express "nothing ships untested": it fails open for every
+  interpreter upstream adds, and for prefixes it does not literally match
+  (`cp314-*` misses free-threaded `cp314t-`). `musllinux` stays under
+  `CIBW_SKIP` — an ABI axis orthogonal to the interpreter set, applied after
+  `CIBW_BUILD`.
+- **The allowlist is DEFINED as "what ci.yml's matrix covers."** Adding an
+  interpreter to one without the other makes the rule decoration. This is why
+  ci.yml gained free-threaded 3.14t; pylibstats still ships `cp314t-*` with no
+  3.14t row and has the gap this repo closed.
+- **`requires-python` must match the built set.** Narrowing the wheels without
+  narrowing the metadata is the 0.9.2 defect, and it is invisible in CI.
+
+`wheel.py-api = "cp312"` and `${SKBUILD_SABI_COMPONENT}` on
+`find_package(Python)` are a PAIR — the first only TAGS a wheel abi3, the
+second is what actually builds one. Setting the first alone yields an
+abi3-tagged, version-locked binary that installs on 3.13+ and then fails to
+import, and **CI cannot detect it**, because cibuildwheel tests each wheel on
+the interpreter that built it — the one version where the broken form works.
+Check it directly instead: the module must be `_core.pyd`/`_core.so` importing
+`python3.dll`/`libpython3.so`, not a version-stamped name against
+`python312.*`. Keeping cp313/cp314 in the allowlist (they emit no extra wheel)
+is what makes cibuildwheel install the abi3 wheel on interpreters it was not
+built with, which is the only check that closes the class.
+
+cibuildwheel is pinned, not floating: unpinned, the interpreter set it knows
+about grows on upstream's schedule rather than ours.
 
 ## Next Steps
 - #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
