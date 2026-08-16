@@ -153,6 +153,12 @@ built with, which is the only check that closes the class.
 cibuildwheel is pinned, not floating: unpinned, the interpreter set it knows
 about grows on upstream's schedule rather than ours.
 
+Published as a fleet standard 2026-08-16:
+[CI House Style §9](https://github.com/OldCrow/standards/blob/main/CI-HOUSE-STYLE.md#9-wheel-builds-pylibhmm-pylibstats),
+merged with pylibstats' twin incidents. AGENTS.md's CI/Validation section
+carries the day-to-day summary; this section stays as the incident record
+behind the rules.
+
 ## Next Steps
 - #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
 - #13 Run the deferred `ruff format` pass as its own reviewable change.
