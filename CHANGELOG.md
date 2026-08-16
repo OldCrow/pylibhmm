@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.10.0 (2026-08-16)
+
+Minor rather than patch: `requires-python` narrows to `>=3.12`, the wheel set
+changes shape, and the pinned libhmm moves to a release with breaking build
+changes of its own.
+
+### Fixed
+- **0.9.2 and 0.9.3 declared `requires-python >= 3.11` but shipped no cp311
+  wheel.** 0.9.0/0.9.1 did; the `CIBW_SKIP` line gained `cp311-*` without
+  `requires-python` moving in the same change. A 3.11 user therefore passed the
+  metadata gate, found no wheel, and pip fell back to the sdist — compiling
+  libhmm on their machine. `requires-python` is now `>=3.12`, matching what is
+  actually built and tested.
+- **`STABLE_ABI` had never done anything.** `nanobind_add_module` has carried
+  the flag since this repo began, but nanobind gates it on
+  `TARGET Python::SABIModule`, which only exists when `find_package(Python)` is
+  given `${SKBUILD_SABI_COMPONENT}` — and `wheel.py-api` was never set, so the
+  component was never requested. Both halves are now in place.
+
+### Build
+- **One abi3 wheel per platform instead of one per interpreter.** `cp312-abi3`
+  covers 3.12 and every later version; free-threaded builds still get their own
+  wheel, as the limited API does not apply there. 21 files per release becomes
+  roughly 15.
+- **Interpreter set is an allowlist (`CIBW_BUILD`), not a denylist.** The old
+  `CIBW_SKIP` naming cp39/cp310/cp311 could not express the invariant it existed
+  for — anything upstream adds ships untested until someone notices. It failed
+  open twice in one run for pylibstats: `cp314-*` does not match the
+  free-threaded `cp314t-` prefix, and nothing named cp315 because 3.15 did not
+  exist when the line was written. `musllinux` stays a `CIBW_SKIP` entry, being
+  an ABI axis orthogonal to the interpreter set.
+- **cibuildwheel pinned to 4.2.0.** Unpinned, the set of interpreters it knows
+  about grows on upstream's schedule rather than ours.
+- **CI matrix gains free-threaded 3.14t**, so the allowlist's claim to cover
+  only what CI tests is true rather than decorative.
+- **libhmm pin moves `v4.2.5` → `v4.3.0`**, and the seven forced unprefixed
+  option sets in the FetchContent branch are removed, as their own comment
+  instructed. v4.3.0 retired those spellings outright and defaults its component
+  toggles off `PROJECT_IS_TOP_LEVEL`, which is false under FetchContent.
+
+---
+
 ## v0.9.3 (2026-07-19)
 
 ### Build

@@ -39,6 +39,11 @@ jobs:
           - { os: ubuntu-latest,  python: "3.12" }
           - { os: ubuntu-latest,  python: "3.13" }
           - { os: ubuntu-latest,  python: "3.14" }
+          # Free-threaded. wheels.yml ships cp314t, and the allowlist there is
+          # defined as "what this matrix covers" — without this row that claim is
+          # false and a free-threaded wheel ships untested. nanobind builds fine
+          # without nb::mod_gil_not_used(); the module simply re-enables the GIL.
+          - { os: ubuntu-latest,  python: "3.14t" }
           - { os: macos-latest,   python: "3.12" }
           - { os: macos-latest,   python: "3.14" }
           - { os: windows-latest, python: "3.12" }

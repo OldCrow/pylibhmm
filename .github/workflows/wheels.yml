@@ -53,7 +53,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install cibuildwheel
-        run: pip install cibuildwheel
+        # Pinned, not floating. Unpinned, the set of interpreters cibuildwheel
+        # knows about grows on upstream's schedule rather than ours — which is
+        # how cp314t and cp315 silently entered pylibstats' build set between a
+        # passing canary and a failing tag, with no commit in between.
+        run: pip install cibuildwheel==4.2.0
 
       - name: Build wheels
         run: cibuildwheel --output-dir wheelhouse
@@ -68,8 +72,28 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs_linux }}
           # Windows: x86_64 only
           CIBW_ARCHS_WINDOWS: "AMD64"
-          # Skip PyPy, musllinux, and older Pythons (SPEC 0: 3.11 past 42-month window)
-          CIBW_SKIP: "*-musllinux_* cp39-* cp310-* cp311-*"
+          # ALLOWLIST, not a denylist. The old CIBW_SKIP line named cp39/cp310/
+          # cp311 and could not express the invariant it existed for: anything
+          # upstream adds ships untested until someone notices. It failed open
+          # in pylibstats twice in one run — 'cp314-*' does not match the
+          # free-threaded 'cp314t-' prefix, and nothing named cp315 because
+          # 3.15 did not exist when the line was written. CIBW_BUILD fails
+          # closed instead.
+          #
+          # This set is defined as "what ci.yml's matrix covers". Do not add an
+          # interpreter here without adding it there, or the allowlist is
+          # decoration. requires-python is >=3.12, so cp311 is absent — that is
+          # the one place this deliberately differs from pylibstats.
+          #
+          # cp312 additionally produces the abi3 wheel that serves 3.13+ (see
+          # pyproject.toml wheel.py-api). cp313/cp314 stay listed even though
+          # they emit no extra wheel: installing the abi3 wheel on an
+          # interpreter it was NOT built with is the only check that catches an
+          # abi3-tagged-but-version-locked binary.
+          CIBW_BUILD: "cp312-* cp313-* cp314-* cp314t-*"
+          # musllinux stays a denylist entry: it is an ABI axis orthogonal to
+          # the interpreter set above, and CIBW_SKIP is applied after CIBW_BUILD.
+          CIBW_SKIP: "*-musllinux_*"
           # Build frontend
           CIBW_BUILD_FRONTEND: "pip"
           # LIBHMM_PORTABLE=ON: swap -march=native for a portable baseline ISA

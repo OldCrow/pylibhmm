@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pylibhmm"
-version = "0.9.3"
+version = "0.10.0"
 description = "Python bindings for libhmm v4 — scalar and multivariate HMMs with NumPy-friendly distributions"
 readme = "README.md"
 license = { text = "MIT" }
@@ -15,6 +15,22 @@ dependencies = ["numpy>=1.22"]
 test = ["pytest>=7.0"]
 
 [tool.scikit-build]
+# Build one CPython Stable ABI (abi3) wheel covering 3.12 and every later
+# version, instead of a separate wheel per interpreter. scikit-build-core turns
+# this off by itself where the limited API does not apply — on PyPy and on
+# free-threaded builds — so those still produce ordinary version-specific
+# wheels with no extra config. requires-python is >=3.12, so unlike pylibstats
+# there is no sub-target interpreter to fall back for.
+#
+# REQUIRES the ${SKBUILD_SABI_COMPONENT} argument on find_package(Python) in
+# CMakeLists.txt. This setting only TAGS the wheel abi3; it does not verify one
+# was built. Without that argument the Python::SABIModule target never exists,
+# nanobind silently drops STABLE_ABI, and the result is a wheel tagged
+# cp312-abi3 containing a python312-linked binary that cannot import anywhere
+# but 3.12. Nothing warns at any layer, and CI cannot catch it on its own:
+# cibuildwheel tests each wheel on the interpreter that built it, the one
+# version where the broken form works. Do not set one without the other.
+wheel.py-api = "cp312"
 cmake.build-type = "Release"
 wheel.packages = ["src/pylibhmm"]
 editable.mode = "redirect"

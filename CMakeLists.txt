@@ -5,7 +5,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+# SKBUILD_SABI_COMPONENT is set to "Development.SABIModule" by scikit-build-core
+# when wheel.py-api requests a Stable ABI build, and to "" otherwise — so this is
+# inert for ordinary builds and for direct CMake invocation, where it is
+# undefined and expands to nothing. It is NOT optional once py-api is set:
+# nanobind gates its STABLE_ABI flag on `TARGET Python::SABIModule` and silently
+# falls back to a version-specific build if the component was never requested,
+# producing an abi3-TAGGED wheel around a version-LOCKED binary. See
+# pyproject.toml. nanobind_add_module below has carried STABLE_ABI since this
+# repo began, doing nothing at all, because that key was never set.
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module ${SKBUILD_SABI_COMPONENT})
 find_package(nanobind CONFIG REQUIRED)
 
 set(PYLIBHMM_LOCAL_LIBHMM_SOURCE
@@ -31,21 +40,15 @@ else()
     FetchContent_Declare(
         libhmm
         GIT_REPOSITORY https://github.com/OldCrow/libhmm.git
-        GIT_TAG        v4.2.5
+        GIT_TAG        v4.3.0
     )
-    # v4.2.5 predates libhmm's LIBHMM_-prefixed option rename and does not
-    # default component toggles off PROJECT_IS_TOP_LEVEL — force the old
-    # unprefixed spellings OFF here. REMOVE these seven lines (and switch to
-    # relying on libhmm's PROJECT_IS_TOP_LEVEL defaults, as the local-source
-    # branch above already does) the next time GIT_TAG is bumped past the
-    # libhmm release that lands the rename.
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-    set(BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_STATIC_ANALYSIS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_CLANG_TIDY OFF CACHE BOOL "" FORCE)
-    set(ENABLE_CPPCHECK OFF CACHE BOOL "" FORCE)
+    # The seven forced unprefixed option sets that used to live here are gone,
+    # as their own comment instructed once GIT_TAG moved past the rename.
+    # v4.3.0 both retired the unprefixed spellings entirely (they are ignored
+    # now, so forcing them did nothing) and defaults its component toggles off
+    # PROJECT_IS_TOP_LEVEL — which is FALSE under FetchContent, so libhmm's
+    # examples, tests and tools are already off without being told. This branch
+    # now behaves the same way the local-source branch above always did.
     FetchContent_MakeAvailable(libhmm)
     set(_pylibhmm_libhmm_target hmm_static)
     set(_pylibhmm_libhmm_include_dir "${libhmm_SOURCE_DIR}/include")
