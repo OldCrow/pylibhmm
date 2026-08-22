@@ -19,7 +19,7 @@
   Verified clean as of 2026-07-14.
 
 ## GitHub Synchronization [DERIVED]
-Last reconciled against live GitHub state: 2026-07-24.
+Last reconciled against live GitHub state: 2026-08-22.
 - GitHub is the collaborator-facing source for issues and milestones; this
   PLAN.md is the agent-facing durable project state. Keep both in sync.
 - When creating, closing, reopening, retitling, or moving a GitHub issue or
@@ -113,11 +113,13 @@ Cross-repo effort tracked in the fleet standards repo
 ([record](https://github.com/OldCrow/standards/blob/main/records/BUILD-STANDARDIZATION-PLAN.md)).
 Commits: `7e6db1d` (minimal CMakePresets.json, CMake minimum bumped to
 3.25), `7a06b42` (local-source path adopts libhmm's `LIBHMM_*` option
-names — coordinated with libhmm `8b0b6f7`; the local path now forces
-nothing, relying on libhmm's `PROJECT_IS_TOP_LEVEL` defaults, while the
-`FetchContent` path keeps forcing the old unprefixed names off until the
-pin bumps past libhmm's rename). AGENTS.md's "Dependency resolution
-order" section updated to match.
+names — coordinated with libhmm `8b0b6f7`; the local path forces
+nothing, relying on libhmm's `PROJECT_IS_TOP_LEVEL` defaults). The
+`FetchContent` path kept forcing the old unprefixed names off only until
+the pin moved past libhmm's rename; that ended at the v4.3.0 bump
+(`c48008c`, 2026-08-16 — see Cross-Repo Dependencies), so both paths now
+converge on the same defaults. AGENTS.md's "Dependency resolution order"
+section matches.
 
 ## Wheel Build Contract (2026-08-16) [DERIVED]
 Settled at v0.10.0, after the shipped 0.9.2/0.9.3 declared
@@ -160,6 +162,11 @@ carries the day-to-day summary; this section stays as the incident record
 behind the rules.
 
 ## Next Steps
+- Bump the libhmm `GIT_TAG` in `CMakeLists.txt` to v4.4.0 (released
+  2026-08-19). libhmm may cut v4.4.1 imminently; one bump straight to
+  v4.4.1 is acceptable. Until then the `pin-currency` job in `ci.yml`
+  fails on its next monthly run — consider a `workflow_dispatch` run to
+  surface it.
 - #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
 - #13 Run the deferred `ruff format` pass as its own reviewable change.
 - #14 Triage the 5 `B017` blind-exception test assertions, then enable `B`.
