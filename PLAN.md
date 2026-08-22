@@ -95,6 +95,13 @@ Currency is enforced mechanically, not by prose: the `pin-currency` job in
 the monthly CI canary compares `GIT_TAG` against libhmm's newest release
 tag and fails on mismatch (GitHub issue #15).
 
+**Done 2026-08-22**: pin bumped to libhmm v4.4.0 (released 2026-08-19),
+pylibhmm to 0.11.0 in the same change — minor on the 0.10.0 precedent
+(parent minor → binding minor; users observe the fixes). libhmm's v4.4.0
+API additions (topology constraints, `fit_best_of_n()`, `sample()`,
+`clone()`) are not yet bound — file as feature issues. libhmm's v4.4.1
+correctness patch (#86/#87 memory safety first) is imminent; re-bump then.
+
 **Done 2026-08-16 at the libhmm v4.3.0 bump**: the seven forced
 `set(... FORCE)` option lines are deleted from the `FetchContent` branch, so
 both dependency paths now converge on libhmm's `PROJECT_IS_TOP_LEVEL`
@@ -162,11 +169,6 @@ carries the day-to-day summary; this section stays as the incident record
 behind the rules.
 
 ## Next Steps
-- Bump the libhmm `GIT_TAG` in `CMakeLists.txt` to v4.4.0 (released
-  2026-08-19). libhmm may cut v4.4.1 imminently; one bump straight to
-  v4.4.1 is acceptable. Until then the `pin-currency` job in `ci.yml`
-  fails on its next monthly run — consider a `workflow_dispatch` run to
-  surface it.
 - #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
 - #13 Run the deferred `ruff format` pass as its own reviewable change.
 - #14 Triage the 5 `B017` blind-exception test assertions, then enable `B`.

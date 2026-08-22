@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.11.0 (unreleased)
+
+Minor, on the 0.10.0 precedent: the pinned libhmm moves a minor release and
+wheel users observe its fixes.
+
+### Changed
+- **libhmm pin moved to v4.4.0.** Brings libhmm's v4.4.0 fixes into the
+  wheels: clean-room SIMD cos/sin at every tier with per-tier ULP gates
+  (libhmm #74), ISA dispatch extended to the transcendental kernels (#58),
+  Bessel log-I0 seam and circular-variance fixes (#72/#73/#76),
+  weighted-Gaussian NaN (#80), rejection of all-zero `pi`/`trans` (#78).
+  No binding-surface change. libhmm v4.4.0's new API (topology constraints,
+  `fit_best_of_n()`, `sample()`, `clone()`) is not exposed by this bump;
+  that is follow-up feature work.
+
 ## v0.10.0 (2026-08-16)
 
 Minor rather than patch: `requires-python` narrows to `>=3.12`, the wheel set

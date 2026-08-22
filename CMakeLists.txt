@@ -40,7 +40,7 @@ else()
     FetchContent_Declare(
         libhmm
         GIT_REPOSITORY https://github.com/OldCrow/libhmm.git
-        GIT_TAG        v4.3.0
+        GIT_TAG        v4.4.0
     )
     # The seven forced unprefixed option sets that used to live here are gone,
     # as their own comment instructed once GIT_TAG moved past the rename.
