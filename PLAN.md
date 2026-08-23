@@ -19,7 +19,7 @@
   Verified clean as of 2026-07-14.
 
 ## GitHub Synchronization [DERIVED]
-Last reconciled against live GitHub state: 2026-08-22.
+Last reconciled against live GitHub state: 2026-08-23.
 - GitHub is the collaborator-facing source for issues and milestones; this
   PLAN.md is the agent-facing durable project state. Keep both in sync.
 - When creating, closing, reopening, retitling, or moving a GitHub issue or
@@ -96,7 +96,8 @@ the monthly CI canary compares `GIT_TAG` against libhmm's newest release
 tag and fails on mismatch (GitHub issue #15).
 
 **Done 2026-08-22**: pin bumped to libhmm v4.4.0 (released 2026-08-19),
-pylibhmm to 0.11.0 in the same change — minor on the 0.10.0 precedent
+pylibhmm to 0.11.0 in the same change — **released 2026-08-22** (tag
+v0.11.0, wheels + CI green, PyPI 0.11.0, GitHub release) — minor on the 0.10.0 precedent
 (parent minor → binding minor; users observe the fixes). libhmm's v4.4.0
 API additions (topology constraints, `fit_best_of_n()`, `sample()`,
 `clone()`) are not yet bound — file as feature issues. libhmm's v4.4.1
