@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.11.0 (unreleased)
+## v0.11.0 (2026-08-22)
 
 Minor, on the 0.10.0 precedent: the pinned libhmm moves a minor release and
 wheel users observe its fixes.
