@@ -1,6 +1,21 @@
 # Changelog
 
-## v0.11.0 (2026-08-22)
+## v0.11.1 (2026-08-26)
+
+Patch, on the 0.11.0 precedent: the pinned libhmm moves a patch release and
+wheel users observe its fixes.
+
+### Changed
+- **libhmm pin moved to v4.4.1** (correctness patch, libhmm PR #102).
+  Brings libhmm's ten defensive-review fixes into the wheels: out-span
+  guard on `getBatchLogProbabilities` (was an OOB heap write, #86); bounded
+  JSON number parse (was an OOB read on non-NUL-terminated views, #87);
+  von Mises `fit()` κ = NaN for near-degenerate angular data (#84); SSE2
+  `log_pd` subnormal prescale (#85); `sin_pd(−0)` sign of zero (#81);
+  AVX-512/AVX2 CPUID feature-mask completion (#83); StudentT μ validation
+  (#90); JSON `pi`/`trans` value validation (#91); count-distribution
+  double→int cast bounds — x86/AArch64 parity (#88); legacy `States:`
+  bound and exception contract (#89). No binding-surface change.
 
 Minor, on the 0.10.0 precedent: the pinned libhmm moves a minor release and
 wheel users observe its fixes.

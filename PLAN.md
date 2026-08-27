@@ -95,13 +95,17 @@ Currency is enforced mechanically, not by prose: the `pin-currency` job in
 the monthly CI canary compares `GIT_TAG` against libhmm's newest release
 tag and fails on mismatch (GitHub issue #15).
 
-**Done 2026-08-22**: pin bumped to libhmm v4.4.0 (released 2026-08-19),
-pylibhmm to 0.11.0 in the same change — **released 2026-08-22** (tag
-v0.11.0, wheels + CI green, PyPI 0.11.0, GitHub release) — minor on the 0.10.0 precedent
-(parent minor → binding minor; users observe the fixes). libhmm's v4.4.0
-API additions (topology constraints, `fit_best_of_n()`, `sample()`,
-`clone()`) are not yet bound — file as feature issues. libhmm's v4.4.1
-correctness patch (#86/#87 memory safety first) is imminent; re-bump then.
+**Done 2026-08-26**: pin bumped to libhmm v4.4.1 (correctness patch,
+released the same day), CI green on the bump commit, pylibhmm to 0.11.1 —
+patch on the 0.11.0 precedent (parent patch → binding patch; users observe
+the ten fixes). No binding-surface change: libhmm v4.4.1 adds only
+documented throws (out-span guard, StudentT μ, JSON pi/trans validation),
+which surface through the bindings as the C++ exceptions nanobind already
+translates. Release status: see the tag/PyPI record in CHANGELOG v0.11.1.
+
+Still outstanding from the v4.4.0 bump: libhmm's v4.4.0 API additions
+(topology constraints, `fit_best_of_n()`, `sample()`, `clone()`) are not
+yet bound — file as feature issues.
 
 **Done 2026-08-16 at the libhmm v4.3.0 bump**: the seven forced
 `set(... FORCE)` option lines are deleted from the `FetchContent` branch, so
