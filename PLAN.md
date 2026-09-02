@@ -10,6 +10,10 @@
   into the input array, scoped to a single bound call — see AGENTS.md
   Architecture.
 - `__init__.pyi` / `_core.pyi` are hand-written, not tool-generated.
+- pyright is the editor/agent type checker (2026-09-01): config in
+  `pyproject.toml` `[tool.pyright]`, venv-aware, not run in CI. Its first
+  pass caught `_core.pyi` declaring `save_hmm(filepath, hmm)` while the
+  binding and wrapper use `(hmm, filepath)`; stub corrected.
 - Python tooling: ruff adopted (`E`/`F`/`I`/`UP`), config in
   `pyproject.toml`. `B` (bugbear) deliberately deferred — see Known Gaps.
   mypy not adopted — see Known Gaps.

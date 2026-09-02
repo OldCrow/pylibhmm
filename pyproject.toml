@@ -35,6 +35,14 @@ cmake.build-type = "Release"
 wheel.packages = ["src/pylibhmm"]
 editable.mode = "redirect"
 
+[tool.pyright]
+# Point the language server at the project venv so numpy and the editable
+# install resolve. Only affects editors/agents; CI does not run pyright.
+venvPath = "."
+venv = ".venv"
+# _core is a compiled extension with a hand-written .pyi and no .py source.
+reportMissingModuleSource = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--basetemp=./.pytest_tmp"

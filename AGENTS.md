@@ -222,6 +222,11 @@ since compact single-line signatures are the idiomatic stub style.
 ruff check src/pylibhmm tests examples
 ruff format src/pylibhmm tests examples   # not yet applied repo-wide; see PLAN.md
 ```
+pyright runs via the editor/agent language server only, not CI:
+`[tool.pyright]` in `pyproject.toml` points it at `.venv` so `numpy` and
+the editable install resolve, and silences the "no source" warning for the
+compiled `_core` module. Baseline: `pyright src/pylibhmm` reports 0 errors.
+
 mypy is not adopted — `__init__.py`'s wrapper methods are only partially
 annotated today, so enabling it would require a real annotation pass
 first rather than just adding config (see PLAN.md Known Gaps).
