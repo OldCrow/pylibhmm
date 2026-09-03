@@ -45,31 +45,19 @@ Last reconciled against live GitHub state: 2026-09-02.
 - None currently exist in this repository (checked 2026-07-14).
 
 ## GitHub Issues Without Milestone [DERIVED]
-- Open issues: 5 as of 2026-09-02 (three from the tooling-setup pass, two
-  feature issues filed 2026-09-02 for the libhmm v4.4.0 binding gap; none
-  assigned a milestone):
+- Open issues: 2 as of 2026-09-02 (none assigned a milestone):
   - #12 Wire ruff check and lint-cpp.sh into CI
-  - #14 Triage B017 blind-exception test assertions, then enable ruff B rule
   - #16 Adopt mypy: annotate __init__.py wrapper surface
-  - #25 Bind libhmm v4.4.0 model-level API: clone(), sample(),
-    fit_best_of_n() (filed 2026-09-02)
-  - #26 Bind libhmm v4.4.0 topology constraints (HmmTopology,
-    initialize_topology, enforce_topology) (filed 2026-09-02)
-- Closed issues: 6 as of 2026-09-02 (#13 closed — format pass applied;
-  #15 closed — pin-currency CI job
-  implemented, see Cross-Repo Dependencies; fetch full list via
-  `gh issue list --state closed --json number,title,milestone -q
+- Closed issues: 9 as of 2026-09-02 (#13 format pass; #14 B017 triage +
+  B rule adopted; #25/#26 v4.4.0 API bound — all shipped in 0.12.0;
+  #15 pin-currency CI job, see Cross-Repo Dependencies; fetch full list
+  via `gh issue list --state closed --json number,title,milestone -q
   '.[] | select(.milestone == null)'` if ever needed).
 
 ## In Progress [OPEN]
 - (none currently tracked — populate as work starts)
 
 ## Known Gaps [OPEN]
-- `B` (flake8-bugbear) ruff rules are deferred: 5 `pytest.raises(Exception)`
-  findings in `tests/` need a real decision on the exact exception type
-  each binding raises (nanobind `type_error`? `ValueError`? `RuntimeError`?)
-  before they can be tightened — not a mechanical fix. Tracked as GitHub
-  issue #14.
 - mypy is not adopted: `__init__.py`'s wrapper methods (`set_pi`,
   `set_trans`, calculator/trainer `__init__`s, etc.) are only partially
   annotated (many params like `pi`, `trans`, `sequences`, `observations`
@@ -107,9 +95,9 @@ which surface through the bindings as the C++ exceptions nanobind already
 translates. Release status: see the tag/PyPI record in CHANGELOG v0.11.1.
 
 From the v4.4.0 bump: libhmm's v4.4.0 API additions (topology
-constraints, `fit_best_of_n()`, `sample()`, `clone()`) are not yet bound —
-FILED 2026-09-02 as #25 (model-level API) and #26 (topology); together
-they ship as pylibhmm 0.12.0 (minor — new surface).
+constraints, `fit_best_of_n()`, `sample()`, `clone()`) — BOUND 2026-09-02
+(#25/#26, shipped as pylibhmm 0.12.0). No remaining binding gap against
+the pinned libhmm v4.4.1.
 
 **Done 2026-08-16 at the libhmm v4.3.0 bump**: the seven forced
 `set(... FORCE)` option lines are deleted from the `FetchContent` branch, so
@@ -189,8 +177,13 @@ can go in green:
 1. #13 `ruff format` pass as its own change. DONE 2026-09-02: 13 files
    reformatted (ruff 0.16.5), `ruff check` green, 165/165 tests pass.
 2. #25 + #26 bind the libhmm v4.4.0 additions → release as 0.12.0
-   (minor). #14's B017 triage can ride this session — writing the new
-   binding tests settles the exact-exception-type question naturally.
+   (minor). DONE 2026-09-02: all six surfaces bound (scalar + `_mv`
+   variants), 38 new tests, 203/203 pass. #14 rode along as planned —
+   triage answer: every flagged site raises `ValueError`
+   (std::invalid_argument via nanobind); `B` enabled in ruff. Toolchain
+   note: this machine's VS 2022 was upgraded in place to VS 2026 (v18,
+   MSVC 14.51); builds verified with CMake generator auto-detection and
+   AGENTS.md's hard generator pin dropped (reproducibility is CI's job).
 3. #12 wire `ruff check` + `scripts/lint-cpp.sh` into CI.
 - DEFERRED past the adoption round: #16 mypy (a decision + annotation
   pass; no drift cost to waiting).

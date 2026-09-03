@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.12.0 (2026-09-02)
+
+Minor: new public surface (the libhmm v4.4.0 model-level API), on the
+0.11.x precedent.
+
+### Added
+- **libhmm v4.4.0 model-level API bound** (issues #25/#26), scalar and
+  multivariate (`_mv`-suffixed) variants throughout:
+  - `clone_hmm` / `clone_hmm_mv` — explicit deep copy (the HMM copy
+    constructor stays deleted upstream).
+  - `sample` / `sample_mv` — draw one observation sequence + state path;
+    `seed=` for reproducible draws, unseeded uses the module-level RNG.
+  - `fit_best_of_n` / `fit_best_of_n_mv` — multi-restart Baum-Welch
+    keeping the best total log-likelihood; restart 0 trains from the
+    current parameters unrandomised.
+  - `HmmTopology` enum (`Ergodic`, `LeftToRight`, `LeftToRightSkip`,
+    `Banded`) with `initialize_topology[_mv]` / `enforce_topology[_mv]`
+    structural transition-matrix constraints. Only the transition matrix
+    is managed; pi stays the caller's responsibility.
+- Test asserting the libhmm #78 `validateInitialized()` message (all-zero
+  pi/trans rejected with an actionable error) surfaces through existing
+  bindings.
+
+### Changed
+- **ruff `B` (flake8-bugbear) adopted** (issue #14): the blind
+  `pytest.raises(Exception)` assertions were triaged — every flagged site
+  raises the nanobind translation of `std::invalid_argument`
+  (`ValueError`) and the tests now assert that exact type; `zip()` calls
+  in examples gained explicit `strict=`.
+- Windows build docs: minimum toolchain is VS 2022-or-later (verified
+  through VS 2026 / MSVC 14.5x); the hard-coded VS 2022 CMake generator
+  pin is dropped in favour of CMake's newest-VS auto-detection.
+
 ## v0.11.1 (2026-08-26)
 
 Patch, on the 0.11.0 precedent: the pinned libhmm moves a patch release and
@@ -16,6 +49,8 @@ wheel users observe its fixes.
   (#90); JSON `pi`/`trans` value validation (#91); count-distribution
   double→int cast bounds — x86/AArch64 parity (#88); legacy `States:`
   bound and exception contract (#89). No binding-surface change.
+
+## v0.11.0 (2026-08-22)
 
 Minor, on the 0.10.0 precedent: the pinned libhmm moves a minor release and
 wheel users observe its fixes.
