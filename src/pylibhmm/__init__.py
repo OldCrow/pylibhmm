@@ -492,9 +492,9 @@ def save_hmm(hmm: Hmm, filepath: str | Path) -> None:
 
 # Re-export MV distribution types directly from the extension.
 MVEmissionDistribution = _core.MVEmissionDistribution
-DiagonalGaussian       = _core.DiagonalGaussian
-FullCovGaussian        = _core.FullCovGaussian
-IndependentComponents  = _core.IndependentComponents
+DiagonalGaussian = _core.DiagonalGaussian
+FullCovGaussian = _core.FullCovGaussian
+IndependentComponents = _core.IndependentComponents
 
 
 def _as_mv_sequence_list(sequences) -> list[np.ndarray]:

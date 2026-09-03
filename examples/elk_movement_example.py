@@ -67,7 +67,7 @@ if not csv_files:
     print("Run:  Rscript scripts/prepare_elk_data.R  (from the libhmm repo root)")
     sys.exit(1)
 
-all_steps:  list[np.ndarray] = []
+all_steps: list[np.ndarray] = []
 all_angles: list[np.ndarray] = []
 for path in csv_files:
     data = np.loadtxt(path, delimiter=",", skiprows=1)
@@ -82,21 +82,18 @@ print(f"\n{n_seqs} elk GPS tracks, {n_total} total observations\n")
 # HMM parameters
 # ---------------------------------------------------------------------------
 N = 2  # states
-pi  = np.array([0.5, 0.5])
-A   = np.array([[0.9, 0.1], [0.1, 0.9]])
+pi = np.array([0.5, 0.5])
+A = np.array([[0.9, 0.1], [0.1, 0.9]])
 # Gamma distributions for step lengths
-gamma_dists = [pylibhmm.Gamma(k=1.0, theta=300.0),
-               pylibhmm.Gamma(k=1.0, theta=3000.0)]
+gamma_dists = [pylibhmm.Gamma(k=1.0, theta=300.0), pylibhmm.Gamma(k=1.0, theta=3000.0)]
 # VonMises distributions for turning angles
-vm_dists = [pylibhmm.VonMises(mu=0.0, kappa=0.5),
-            pylibhmm.VonMises(mu=0.0, kappa=0.2)]
+vm_dists = [pylibhmm.VonMises(mu=0.0, kappa=0.5), pylibhmm.VonMises(mu=0.0, kappa=0.2)]
 
 print("Initial parameters:")
 for s in range(N):
     g, v = gamma_dists[s], vm_dists[s]
     lbl = "encamped " if s == 0 else "travelling"
-    print(f"  State {s} ({lbl}): step mean={g.mean:.1f} m  "
-          f"angle kappa={v.kappa:.3f}")
+    print(f"  State {s} ({lbl}): step mean={g.mean:.1f} m  angle kappa={v.kappa:.3f}")
 print()
 
 # ---------------------------------------------------------------------------
@@ -104,13 +101,13 @@ print()
 # ---------------------------------------------------------------------------
 NEG_INF = -np.inf
 
+
 def log_emission(steps: np.ndarray, angles: np.ndarray) -> np.ndarray:
     """(T, N) log-emission matrix for one sequence."""
     T = len(steps)
     logE = np.empty((T, N))
     for s in range(N):
-        logE[:, s] = (gamma_dists[s].log_pdf(steps) +
-                      vm_dists[s].log_pdf(angles))
+        logE[:, s] = gamma_dists[s].log_pdf(steps) + vm_dists[s].log_pdf(angles)
     return logE
 
 
@@ -129,14 +126,14 @@ def forward_backward(logE: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     la[0] = np.log(pi) + logE[0]
     for t in range(1, T):
         for j in range(N):
-            la[t, j] = np.logaddexp.reduce(la[t-1] + log_A[:, j]) + logE[t, j]
+            la[t, j] = np.logaddexp.reduce(la[t - 1] + log_A[:, j]) + logE[t, j]
     ll = np.logaddexp.reduce(la[-1])
 
     # Backward
     lb = np.zeros((T, N))
     for t in range(T - 2, -1, -1):
         for i in range(N):
-            lb[t, i] = np.logaddexp.reduce(log_A[i] + logE[t+1] + lb[t+1])
+            lb[t, i] = np.logaddexp.reduce(log_A[i] + logE[t + 1] + lb[t + 1])
 
     # Gamma
     log_gamma = la + lb
@@ -148,9 +145,7 @@ def forward_backward(logE: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     for t in range(T - 1):
         for i in range(N):
             for j in range(N):
-                xi_sum[i, j] += np.exp(
-                    la[t, i] + log_A[i, j] + logE[t+1, j] + lb[t+1, j] - ll
-                )
+                xi_sum[i, j] += np.exp(la[t, i] + log_A[i, j] + logE[t + 1, j] + lb[t + 1, j] - ll)
 
     return gamma, xi_sum, ll
 
@@ -160,34 +155,31 @@ print(f"{'iter':>6}  {'log-likelihood':>16}  {'delta':>12}")
 print("-" * 38)
 
 t0 = time.perf_counter()
-prev_ll = sum(
-    forward_backward(log_emission(s, a))[2]
-    for s, a in zip(all_steps, all_angles)
-)
+prev_ll = sum(forward_backward(log_emission(s, a))[2] for s, a in zip(all_steps, all_angles))
 print(f"{'0':>6}  {prev_ll:>16.3f}  {'(initial)':>12}")
 
 conv_iter = -1
 for it in range(1, 201):
     # E-step: accumulate across all sequences
-    gamma_all   = [[] for _ in range(N)]
-    steps_all   = []
-    angles_all  = []
-    xi_sum_tot  = np.zeros((N, N))
-    pi_num      = np.zeros(N)
-    total_ll    = 0.0
+    gamma_all = [[] for _ in range(N)]
+    steps_all = []
+    angles_all = []
+    xi_sum_tot = np.zeros((N, N))
+    pi_num = np.zeros(N)
+    total_ll = 0.0
 
     for steps, angles in zip(all_steps, all_angles):
         logE = log_emission(steps, angles)
         gamma, xi_sum, ll = forward_backward(logE)
-        total_ll  += ll
-        pi_num    += gamma[0]
+        total_ll += ll
+        pi_num += gamma[0]
         xi_sum_tot += xi_sum
         steps_all.extend(steps)
         angles_all.extend(angles)
         for s in range(N):
             gamma_all[s].extend(gamma[:, s])
 
-    steps_np  = np.array(steps_all)
+    steps_np = np.array(steps_all)
     angles_np = np.array(angles_all)
     for s in range(N):
         gamma_all[s] = np.array(gamma_all[s])
@@ -200,7 +192,7 @@ for it in range(1, 201):
 
     # M-step: update emission distributions via weighted MLE
     for s in range(N):
-        gamma_dists[s].fit_weighted(steps_np,  gamma_all[s])
+        gamma_dists[s].fit_weighted(steps_np, gamma_all[s])
         vm_dists[s].fit_weighted(angles_np, gamma_all[s])
 
     delta = total_ll - prev_ll
@@ -224,8 +216,10 @@ print("\n=== pylibhmm results ===")
 print(f"Wall time: {wall_ms:.0f} ms\n")
 for idx, lbl in [(enc, "encamped  "), (trav, "travelling")]:
     g, v = gamma_dists[idx], vm_dists[idx]
-    print(f"State {idx} ({lbl}): step mean={g.mean:7.1f} m  "
-          f"sd={g.std:7.1f} m  angle kappa={v.kappa:.3f}")
+    print(
+        f"State {idx} ({lbl}): step mean={g.mean:7.1f} m  "
+        f"sd={g.std:7.1f} m  angle kappa={v.kappa:.3f}"
+    )
 
 print("\nTransition matrix:")
 for row in A:
@@ -235,7 +229,7 @@ print(f"\nLog-likelihood: {prev_ll:.1f}")
 print("\n=== Comparison: pylibhmm vs moveHMM (R) ===\n")
 print(f"{'':>26} {'pylibhmm':>10} {'moveHMM':>12}")
 print("-" * 50)
-ge, ve = gamma_dists[enc],  vm_dists[enc]
+ge, ve = gamma_dists[enc], vm_dists[enc]
 gt, vt = gamma_dists[trav], vm_dists[trav]
 print(f"{'step mean encamped (m)':>26} {ge.mean:>10.1f} {373.8:>12.1f}")
 print(f"{'step sd encamped (m)':>26} {ge.std:>10.1f} {399.0:>12.1f}")
@@ -243,7 +237,7 @@ print(f"{'step mean travelling (m)':>26} {gt.mean:>10.1f} {3247.3:>12.1f}")
 print(f"{'step sd travelling (m)':>26} {gt.std:>10.1f} {4393.5:>12.1f}")
 print(f"{'angle kappa encamped':>26} {ve.kappa:>10.3f} {0.592:>12.3f}")
 print(f"{'angle kappa travelling':>26} {vt.kappa:>10.3f} {0.208:>12.3f}")
-print(f"{'A[enc→enc]':>26} {A[enc,enc]:>10.4f} {0.912:>12.3f}")
-print(f"{'A[trav→trav]':>26} {A[trav,trav]:>10.4f} {0.800:>12.3f}")
+print(f"{'A[enc→enc]':>26} {A[enc, enc]:>10.4f} {0.912:>12.3f}")
+print(f"{'A[trav→trav]':>26} {A[trav, trav]:>10.4f} {0.800:>12.3f}")
 print(f"{'Log-likelihood':>26} {prev_ll:>10.1f} {-6935.6:>12.1f}")
 print(f"{'Wall time':>26} {wall_ms:.0f} ms   {'~2000 ms':>12}")

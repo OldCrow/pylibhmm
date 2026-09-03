@@ -11,6 +11,7 @@ MLE conventions used here (matching libhmm v3.8.0):
   Discrete      : P(k) = count(k) / N   (or weighted: sum_weights_k / sum_weights)
   Gamma         : Newton-Raphson MLE  (k, theta); unweighted and weighted
 """
+
 import math
 
 import numpy as np
@@ -169,9 +170,7 @@ class TestGammaFitting:
     #
     #   First moment:  k̂ * θ̂ = sample mean  (always exact at convergence)
     #   Positivity:    k̂ > 0, θ̂ > 0
-    _data = np.array(
-        [1.2, 3.5, 2.1, 4.8, 0.9, 6.1, 2.7, 3.3, 1.8, 4.5], dtype=np.float64
-    )
+    _data = np.array([1.2, 3.5, 2.1, 4.8, 0.9, 6.1, 2.7, 3.3, 1.8, 4.5], dtype=np.float64)
 
     def test_unweighted_mean_preserved(self):
         """k̂ * θ̂ must equal the sample mean (MLE first-moment condition)."""
@@ -194,4 +193,3 @@ class TestGammaFitting:
         d = pylibhmm.Gamma()
         d.fit_weighted(data, weights)
         assert d.k * d.theta == pytest.approx(weighted_mean, rel=1e-6)
-

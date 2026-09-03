@@ -45,18 +45,18 @@ Last reconciled against live GitHub state: 2026-09-02.
 - None currently exist in this repository (checked 2026-07-14).
 
 ## GitHub Issues Without Milestone [DERIVED]
-- Open issues: 6 as of 2026-09-02 (four from the tooling-setup pass, two
+- Open issues: 5 as of 2026-09-02 (three from the tooling-setup pass, two
   feature issues filed 2026-09-02 for the libhmm v4.4.0 binding gap; none
   assigned a milestone):
   - #12 Wire ruff check and lint-cpp.sh into CI
-  - #13 Run deferred ruff format pass across Python surface
   - #14 Triage B017 blind-exception test assertions, then enable ruff B rule
   - #16 Adopt mypy: annotate __init__.py wrapper surface
   - #25 Bind libhmm v4.4.0 model-level API: clone(), sample(),
     fit_best_of_n() (filed 2026-09-02)
   - #26 Bind libhmm v4.4.0 topology constraints (HmmTopology,
     initialize_topology, enforce_topology) (filed 2026-09-02)
-- Closed issues: 5 as of 2026-07-24 (#15 closed — pin-currency CI job
+- Closed issues: 6 as of 2026-09-02 (#13 closed — format pass applied;
+  #15 closed — pin-currency CI job
   implemented, see Cross-Repo Dependencies; fetch full list via
   `gh issue list --state closed --json number,title,milestone -q
   '.[] | select(.milestone == null)'` if ever needed).
@@ -65,12 +65,6 @@ Last reconciled against live GitHub state: 2026-09-02.
 - (none currently tracked — populate as work starts)
 
 ## Known Gaps [OPEN]
-- `ruff format` would reformat 13 files (nearly the whole Python surface,
-  including `__init__.py`) under the new config — not applied in this pass
-  since it's a large, purely cosmetic diff that deserves its own visible
-  change rather than being bundled silently into a tooling-setup pass. Run
-  `ruff format src/pylibhmm tests examples` as a deliberate follow-up.
-  Tracked as GitHub issue #13.
 - `B` (flake8-bugbear) ruff rules are deferred: 5 `pytest.raises(Exception)`
   findings in `tests/` need a real decision on the exact exception type
   each binding raises (nanobind `type_error`? `ValueError`? `RuntimeError`?)
@@ -192,7 +186,8 @@ gap onto the adoption-era bump, muddying a behavior-change release with
 a feature surface). Order is deliberate — format before feature work so
 the feature diffs are clean, format before CI wiring so a format check
 can go in green:
-1. #13 `ruff format` pass as its own change.
+1. #13 `ruff format` pass as its own change. DONE 2026-09-02: 13 files
+   reformatted (ruff 0.16.5), `ruff check` green, 165/165 tests pass.
 2. #25 + #26 bind the libhmm v4.4.0 additions → release as 0.12.0
    (minor). #14's B017 triage can ride this session — writing the new
    binding tests settles the exact-exception-type question naturally.

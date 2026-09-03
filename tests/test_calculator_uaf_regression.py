@@ -25,6 +25,7 @@ import pylibhmm
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _churn_heap(n: int = 2000, size: int = 200) -> None:
     """Allocate and immediately discard n arrays to overwrite freed memory."""
     junk = [np.full(size, 1e300) for _ in range(n)]
@@ -58,13 +59,12 @@ def _make_mv_hmm() -> pylibhmm.HmmMV:
 # Scalar ForwardBackwardCalculator
 # ---------------------------------------------------------------------------
 
+
 class TestFBCalcUAF:
     def setup_method(self):
         rng = np.random.default_rng(0)
         self.hmm = _make_scalar_hmm()
-        self.obs = np.concatenate(
-            [rng.normal(0, 1, 50), rng.normal(5, 1, 50)]
-        )
+        self.obs = np.concatenate([rng.normal(0, 1, 50), rng.normal(5, 1, 50)])
 
     def test_no_arg_compute_stable_after_heap_churn(self):
         """No-arg compute() must re-use the construction-time sequence safely."""
@@ -105,13 +105,12 @@ class TestFBCalcUAF:
 # Scalar ViterbiCalculator
 # ---------------------------------------------------------------------------
 
+
 class TestViterbiCalcUAF:
     def setup_method(self):
         rng = np.random.default_rng(1)
         self.hmm = _make_scalar_hmm()
-        self.obs = np.concatenate(
-            [rng.normal(0, 1, 50), rng.normal(5, 1, 50)]
-        )
+        self.obs = np.concatenate([rng.normal(0, 1, 50), rng.normal(5, 1, 50)])
 
     def test_decode_stable_after_heap_churn(self):
         """decode() must re-run Viterbi safely after heap churn."""
@@ -131,13 +130,12 @@ class TestViterbiCalcUAF:
 # MV MVViterbiCalculator
 # ---------------------------------------------------------------------------
 
+
 class TestMVViterbiCalcUAF:
     def setup_method(self):
         rng = np.random.default_rng(2)
         self.hmm = _make_mv_hmm()
-        self.obs = np.vstack(
-            [rng.normal(0, 1, (50, 2)), rng.normal(5, 1, (50, 2))]
-        )
+        self.obs = np.vstack([rng.normal(0, 1, (50, 2)), rng.normal(5, 1, (50, 2))])
 
     def test_decode_stable_after_heap_churn(self):
         """MVViterbiCalculator.decode() must re-run safely after heap churn."""
@@ -159,13 +157,12 @@ class TestMVViterbiCalcUAF:
 # MV MVForwardBackwardCalculator
 # ---------------------------------------------------------------------------
 
+
 class TestMVFBCalcUAF:
     def setup_method(self):
         rng = np.random.default_rng(3)
         self.hmm = _make_mv_hmm()
-        self.obs = np.vstack(
-            [rng.normal(0, 1, (50, 2)), rng.normal(5, 1, (50, 2))]
-        )
+        self.obs = np.vstack([rng.normal(0, 1, (50, 2)), rng.normal(5, 1, (50, 2))])
 
     def test_log_probability_stable_after_heap_churn(self):
         """MVForwardBackwardCalculator log_probability must survive heap churn."""

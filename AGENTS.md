@@ -220,7 +220,7 @@ PLAN.md Known Gaps). `.pyi` stub files are exempt from the line-length rule
 since compact single-line signatures are the idiomatic stub style.
 ```bash
 ruff check src/pylibhmm tests examples
-ruff format src/pylibhmm tests examples   # not yet applied repo-wide; see PLAN.md
+ruff format src/pylibhmm tests examples   # applied repo-wide at v0.11.1+ (issue #13)
 ```
 pyright runs via the editor/agent language server only, not CI:
 `[tool.pyright]` in `pyproject.toml` points it at `.venv` so `numpy` and

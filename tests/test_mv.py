@@ -4,6 +4,7 @@ Covers DiagonalGaussian, FullCovGaussian, IndependentComponents,
 HmmMV, MVForwardBackwardCalculator, MVBaumWelchTrainer, kmeans_init,
 and MV JSON round-trip.
 """
+
 import math
 import tempfile
 from pathlib import Path
@@ -19,16 +20,18 @@ import pylibhmm as p
 
 RNG = np.random.default_rng(42)
 
+
 def make_sequences(n_seq=5, T=30, D=2, seed=0):
     """Generate synthetic 2-D Gaussian sequences."""
     rng = np.random.default_rng(seed)
     return [rng.standard_normal((T, D)) for _ in range(n_seq)]
 
+
 def make_hmm_mv(n_states=2, D=2):
     """Construct a minimal HmmMV with DiagonalGaussian distributions."""
     hmm = p.HmmMV(n_states)
     pi = np.ones(n_states) / n_states
-    trans = (np.eye(n_states) * 0.8 + np.ones((n_states, n_states)) * 0.1)
+    trans = np.eye(n_states) * 0.8 + np.ones((n_states, n_states)) * 0.1
     # Normalise rows
     trans /= trans.sum(axis=1, keepdims=True)
     hmm.set_pi(pi)
@@ -37,9 +40,11 @@ def make_hmm_mv(n_states=2, D=2):
         hmm.set_distribution(s, p.DiagonalGaussian(D))
     return hmm
 
+
 # ---------------------------------------------------------------------------
 # DiagonalGaussian
 # ---------------------------------------------------------------------------
+
 
 class TestDiagonalGaussian:
     D = 3
@@ -103,8 +108,7 @@ class TestDiagonalGaussian:
 
     def test_fit_weighted(self):
         d = p.DiagonalGaussian(self.D)
-        X = np.array([[1.0, 0.0, 0.0],
-                      [0.0, 1.0, 0.0]], dtype=np.float64)
+        X = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float64)
         w = np.array([1.0, 0.0])  # concentrate all weight on row 0
         d.fit_weighted(X, w)
         np.testing.assert_allclose(d.means, X[0], atol=1e-9)
@@ -130,6 +134,7 @@ class TestDiagonalGaussian:
 # ---------------------------------------------------------------------------
 # FullCovGaussian
 # ---------------------------------------------------------------------------
+
 
 class TestFullCovGaussian:
     D = 2
@@ -202,6 +207,7 @@ class TestFullCovGaussian:
 # IndependentComponents
 # ---------------------------------------------------------------------------
 
+
 class TestIndependentComponents:
     D = 2
 
@@ -252,6 +258,7 @@ class TestIndependentComponents:
 # ---------------------------------------------------------------------------
 # HmmMV
 # ---------------------------------------------------------------------------
+
 
 class TestHmmMV:
     N = 2
@@ -307,10 +314,7 @@ class TestHmmMV:
         p.kmeans_init(hmm, seqs, seed=3)
 
         def total_ll():
-            return sum(
-                p.MVForwardBackwardCalculator(hmm, s).log_probability
-                for s in seqs
-            )
+            return sum(p.MVForwardBackwardCalculator(hmm, s).log_probability for s in seqs)
 
         prev = total_ll()
         trainer = p.MVBaumWelchTrainer(hmm, seqs)
@@ -343,6 +347,7 @@ class TestHmmMV:
         p.kmeans_init(hmm, seqs, seed=7)
         trainer = p.MVBaumWelchTrainer(hmm, seqs)
         import math
+
         assert not math.isfinite(trainer.last_log_probability)
         trainer.train()
         assert math.isfinite(trainer.last_log_probability)
@@ -352,6 +357,7 @@ class TestHmmMV:
 # ---------------------------------------------------------------------------
 # Kmeans init
 # ---------------------------------------------------------------------------
+
 
 class TestKmeansInit:
     def test_basic(self):
@@ -376,6 +382,7 @@ class TestKmeansInit:
 # MV JSON round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestMVIO:
     def _make_trained_hmm(self):
         hmm = make_hmm_mv(2, 2)
@@ -392,7 +399,7 @@ class TestMVIO:
         assert "multivariate" in json_str
         hmm2 = p.from_json_mv(json_str)
         # Recovered HMM should give same log-probability
-        calc1 = p.MVForwardBackwardCalculator(hmm,  seqs[0])
+        calc1 = p.MVForwardBackwardCalculator(hmm, seqs[0])
         calc2 = p.MVForwardBackwardCalculator(hmm2, seqs[0])
         assert calc1.log_probability == pytest.approx(calc2.log_probability, rel=1e-6)
 
@@ -404,7 +411,7 @@ class TestMVIO:
             p.save_json_mv(hmm, path)
             assert path.stat().st_size > 0
             hmm2 = p.load_json_mv(path)
-            calc1 = p.MVForwardBackwardCalculator(hmm,  seqs[0])
+            calc1 = p.MVForwardBackwardCalculator(hmm, seqs[0])
             calc2 = p.MVForwardBackwardCalculator(hmm2, seqs[0])
             assert calc1.log_probability == pytest.approx(calc2.log_probability, rel=1e-6)
         finally:
@@ -458,6 +465,7 @@ class TestMVIO:
 # P-3: MVForwardBackwardCalculator.decode_posterior
 # ---------------------------------------------------------------------------
 
+
 class TestMVDecodePosterior:
     N = 2
     D = 2
@@ -490,6 +498,7 @@ class TestMVDecodePosterior:
 # ---------------------------------------------------------------------------
 # P-1: thread-local RNG — sample_mv from concurrent threads is non-crashing
 # ---------------------------------------------------------------------------
+
 
 def test_sample_mv_thread_safety():
     """Draw samples from DiagonalGaussian across multiple threads.

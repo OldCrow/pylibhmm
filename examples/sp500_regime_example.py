@@ -44,17 +44,17 @@ import numpy as np
 import pylibhmm
 
 
-def load_returns(ticker: str, start: str, end: str,
-                 csv_fallback: str) -> np.ndarray:
+def load_returns(ticker: str, start: str, end: str, csv_fallback: str) -> np.ndarray:
     """Load log-returns from yfinance (preferred) or a CSV fallback."""
     try:
         import yfinance as yf  # type: ignore[import]
-        df = yf.download(ticker, start=start, end=end,
-                         auto_adjust=True, progress=False)
+
+        df = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
         prices = df["Close"].squeeze().dropna().to_numpy(dtype=np.float64).flatten()
         returns = np.diff(np.log(prices), axis=0).flatten()
-        print(f"Downloaded {ticker} ({start} to {end}) via yfinance: "
-              f"{len(returns)} daily log-returns")
+        print(
+            f"Downloaded {ticker} ({start} to {end}) via yfinance: {len(returns)} daily log-returns"
+        )
         return returns
     except ImportError:
         pass
@@ -80,14 +80,18 @@ def run_regime_hmm(returns: np.ndarray, label: str) -> None:
 
     hmm = pylibhmm.Hmm(3)
     hmm.set_pi(np.array([0.333, 0.334, 0.333]))
-    hmm.set_trans(np.array([
-        [0.95, 0.03, 0.02],
-        [0.02, 0.95, 0.03],
-        [0.02, 0.03, 0.95],
-    ]))
+    hmm.set_trans(
+        np.array(
+            [
+                [0.95, 0.03, 0.02],
+                [0.02, 0.95, 0.03],
+                [0.02, 0.03, 0.95],
+            ]
+        )
+    )
     hmm.set_distribution(0, pylibhmm.StudentT(nu=10.0, location=-0.002, scale=0.025))
-    hmm.set_distribution(1, pylibhmm.StudentT(nu=30.0, location=0.000,  scale=0.012))
-    hmm.set_distribution(2, pylibhmm.StudentT(nu= 5.0, location=0.001,  scale=0.006))
+    hmm.set_distribution(1, pylibhmm.StudentT(nu=30.0, location=0.000, scale=0.012))
+    hmm.set_distribution(2, pylibhmm.StudentT(nu=5.0, location=0.001, scale=0.006))
 
     sequences = [returns]
     trainer = pylibhmm.BaumWelchTrainer(hmm, sequences)
@@ -114,17 +118,14 @@ def run_regime_hmm(returns: np.ndarray, label: str) -> None:
     final_ll = pylibhmm.ForwardBackwardCalculator(hmm, returns).log_probability
 
     # Sort states by sigma descending: bearish first
-    order = sorted(range(3),
-                   key=lambda s: hmm.get_distribution(s).scale,
-                   reverse=True)
+    order = sorted(range(3), key=lambda s: hmm.get_distribution(s).scale, reverse=True)
     labels_sorted = ["bearish", "neutral", "bullish"]
 
     print(f"\n=== pylibhmm {label} results ===")
     print(f"Wall time: {wall_s:.1f} s\n")
     for state, lbl in zip(order, labels_sorted):
         d = hmm.get_distribution(state)
-        print(f"State {state} ({lbl}):  nu={d.nu:6.1f}  "
-              f"mu={d.location:+.5f}  sigma={d.scale:.5f}")
+        print(f"State {state} ({lbl}):  nu={d.nu:6.1f}  mu={d.location:+.5f}  sigma={d.scale:.5f}")
 
     T = hmm.get_trans()
     print("\nTransition matrix:")
@@ -135,18 +136,22 @@ def run_regime_hmm(returns: np.ndarray, label: str) -> None:
     # Viterbi and posterior decoding
     vc = pylibhmm.ViterbiCalculator(hmm, returns)
     fb = pylibhmm.ForwardBackwardCalculator(hmm, returns)
-    viterbi   = vc.decode()
+    viterbi = vc.decode()
     posterior = fb.decode_posterior()
-    v_cnt = [int((viterbi   == s).sum()) for s in order]
+    v_cnt = [int((viterbi == s).sum()) for s in order]
     p_cnt = [int((posterior == s).sum()) for s in order]
-    print("\nViterbi   occupancy:  " +
-          "  ".join(f"{lbl}={v_cnt[r]:4d}" for r, lbl in enumerate(labels_sorted)))
-    print("Posterior occupancy:  " +
-          "  ".join(f"{lbl}={p_cnt[r]:4d}" for r, lbl in enumerate(labels_sorted)))
+    print(
+        "\nViterbi   occupancy:  "
+        + "  ".join(f"{lbl}={v_cnt[r]:4d}" for r, lbl in enumerate(labels_sorted))
+    )
+    print(
+        "Posterior occupancy:  "
+        + "  ".join(f"{lbl}={p_cnt[r]:4d}" for r, lbl in enumerate(labels_sorted))
+    )
 
     # Model selection — compare 2-state vs 3-state via AIC/BIC
     mc3 = pylibhmm.evaluate_model(hmm, final_ll, len(returns))
-    k3  = pylibhmm.count_free_parameters(hmm)
+    k3 = pylibhmm.count_free_parameters(hmm)
     print(f"\nModel selection — 3-state model (k={k3}, n={len(returns)}):")
     print(f"  AIC  = {mc3.aic:.1f}")
     print(f"  BIC  = {mc3.bic:.1f}")
@@ -157,7 +162,7 @@ def run_regime_hmm(returns: np.ndarray, label: str) -> None:
     hmm2.set_pi(np.array([0.5, 0.5]))
     hmm2.set_trans(np.array([[0.95, 0.05], [0.05, 0.95]]))
     hmm2.set_distribution(0, pylibhmm.StudentT(nu=10.0, location=-0.001, scale=0.020))
-    hmm2.set_distribution(1, pylibhmm.StudentT(nu=10.0, location=0.001,  scale=0.008))
+    hmm2.set_distribution(1, pylibhmm.StudentT(nu=10.0, location=0.001, scale=0.008))
     t2 = pylibhmm.BaumWelchTrainer(hmm2, sequences)
     ll2_prev = pylibhmm.ForwardBackwardCalculator(hmm2, returns).log_probability
     for _ in range(100):
@@ -167,7 +172,7 @@ def run_regime_hmm(returns: np.ndarray, label: str) -> None:
             break
         ll2_prev = ll2
     mc2 = pylibhmm.evaluate_model(hmm2, ll2_prev, len(returns))
-    k2  = pylibhmm.count_free_parameters(hmm2)
+    k2 = pylibhmm.count_free_parameters(hmm2)
     print(f"\nModel selection — 2-state model (k={k2}, n={len(returns)}):")
     print(f"  AIC  = {mc2.aic:.1f}")
     print(f"  BIC  = {mc2.bic:.1f}")
@@ -190,8 +195,7 @@ returns = load_returns(
     end="2022-12-31",
     csv_fallback=f"{data_dir}/sp500_logreturns.csv",
 )
-print(f"  min={returns.min():.6f}  max={returns.max():.6f}"
-      f"  mean={returns.mean():.6f}")
+print(f"  min={returns.min():.6f}  max={returns.max():.6f}  mean={returns.mean():.6f}")
 print("\nInitial parameters (same as DAX example):")
 print("  State 0 (bearish):  nu=10  mu=-0.002  sigma=0.025")
 print("  State 1 (neutral):  nu=30  mu= 0.000  sigma=0.012")

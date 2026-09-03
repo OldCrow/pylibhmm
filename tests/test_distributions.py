@@ -1,4 +1,5 @@
 """Tests for pylibhmm distribution bindings."""
+
 import math
 
 import numpy as np
@@ -364,6 +365,7 @@ class TestVonMises:
 
     def test_fit_unweighted(self):
         import math
+
         rng = np.random.default_rng(42)
         # Concentrated around pi/2
         angles = rng.vonmises(math.pi / 2, 3.0, size=500)
@@ -375,6 +377,7 @@ class TestVonMises:
 
     def test_fit_weighted(self):
         import math
+
         data = np.array([0.0, math.pi, math.pi], dtype=np.float64)
         weights = np.array([0.01, 1.0, 1.0], dtype=np.float64)
         d = pylibhmm.VonMises()

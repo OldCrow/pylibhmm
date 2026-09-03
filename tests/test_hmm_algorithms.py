@@ -1,4 +1,5 @@
 """Tests for HMM algorithm, calculator, and trainer bindings."""
+
 import tempfile
 from pathlib import Path
 
@@ -220,6 +221,7 @@ def test_map_baum_welch_compute_log_prior(simple_hmm):
 # P-4: from_json / load_json must return the Python Hmm subclass
 # ---------------------------------------------------------------------------
 
+
 def test_from_json_returns_python_subclass(simple_hmm):
     json_str = pylibhmm.to_json(simple_hmm)
     result = pylibhmm.from_json(json_str)
@@ -286,6 +288,7 @@ def test_compute_bic():
     k = 5
     n = 200
     import math
+
     bic = pylibhmm.compute_bic(logL, k, n)
     assert bic == pytest.approx(k * math.log(n) - 2 * logL)
 

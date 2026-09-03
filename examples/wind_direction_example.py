@@ -113,18 +113,24 @@ final_ll = pylibhmm.ForwardBackwardCalculator(hmm, directions).log_probability
 d0, d1 = hmm.get_distribution(0), hmm.get_distribution(1)
 conc, disp = (0, 1) if d0.kappa > d1.kappa else (1, 0)
 
+
 def to_deg(r: float) -> float:
     return r * 180.0 / math.pi
+
 
 dc = hmm.get_distribution(conc)
 dd = hmm.get_distribution(disp)
 
 print("\n=== pylibhmm results ===")
 print(f"Wall time: {wall_ms:.1f} ms\n")
-print(f"State {conc} (prevailing):  mu={dc.mu:.4f} rad ({to_deg(dc.mu):.1f}°)"
-      f"  kappa={dc.kappa:.4f}  circ_var={dc.circular_variance:.4f}")
-print(f"State {disp} (variable):    mu={dd.mu:.4f} rad ({to_deg(dd.mu):.1f}°)"
-      f"  kappa={dd.kappa:.4f}  circ_var={dd.circular_variance:.4f}")
+print(
+    f"State {conc} (prevailing):  mu={dc.mu:.4f} rad ({to_deg(dc.mu):.1f}°)"
+    f"  kappa={dc.kappa:.4f}  circ_var={dc.circular_variance:.4f}"
+)
+print(
+    f"State {disp} (variable):    mu={dd.mu:.4f} rad ({to_deg(dd.mu):.1f}°)"
+    f"  kappa={dd.kappa:.4f}  circ_var={dd.circular_variance:.4f}"
+)
 
 T = hmm.get_trans()
 print("\nTransition matrix:")
@@ -137,7 +143,7 @@ vc = pylibhmm.ViterbiCalculator(hmm, directions)
 viterbi_states = vc.decode()
 fb = pylibhmm.ForwardBackwardCalculator(hmm, directions)
 posterior_states = fb.decode_posterior()
-v_cnt = [int((viterbi_states  == s).sum()) for s in range(2)]
+v_cnt = [int((viterbi_states == s).sum()) for s in range(2)]
 p_cnt = [int((posterior_states == s).sum()) for s in range(2)]
 print(f"\nViterbi   occupancy: prevailing={v_cnt[conc]:5d}  variable={v_cnt[disp]:5d} hr")
 print(f"Posterior occupancy: prevailing={p_cnt[conc]:5d}  variable={p_cnt[disp]:5d} hr")
