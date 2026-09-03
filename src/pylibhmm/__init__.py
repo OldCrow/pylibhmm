@@ -487,6 +487,145 @@ def save_hmm(hmm: Hmm, filepath: str | Path) -> None:
 
 
 # =============================================================================
+# Model-level operations (libhmm v4.4.0)
+# =============================================================================
+
+# Re-export the topology enum directly from the extension.
+HmmTopology = _core.HmmTopology
+
+
+def clone_hmm(hmm: Hmm) -> Hmm:
+    """Explicit deep copy of a scalar HMM.
+
+    libhmm deletes the HMM copy constructor on purpose — copying deep-copies
+    every emission distribution, and ``clone_hmm`` keeps that cost visible at
+    call sites (checkpointing, ensembles).
+
+    Args:
+        hmm: The model to copy.
+
+    Returns:
+        Independent :class:`Hmm` with copied pi, transition matrix, and
+        cloned emission distributions.
+    """
+    core = _core.clone_hmm(hmm)
+    result = Hmm(core.num_states)
+    result.set_pi(core.get_pi())
+    result.set_trans(core.get_trans())
+    for i in range(core.num_states):
+        result.set_distribution(i, core.get_distribution(i))
+    return result
+
+
+def sample(hmm: Hmm, T: int, seed: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Sample one observation sequence of length *T* from a scalar HMM.
+
+    Draws ``s_0 ~ Categorical(pi)``, then per step ``o_t ~ emission(s_t)``
+    and ``s_{t+1} ~ Categorical(A[s_t, :])``.  Rows are treated as
+    unnormalised weights.
+
+    Args:
+        hmm: The model to sample from.  pi and the transition matrix must
+            have been set (a zero row raises ``RuntimeError``).
+        T: Sequence length.  Must be >= 0.
+        seed: Integer RNG seed for a reproducible draw.  ``None`` (default)
+            uses the module-level non-deterministic RNG.
+
+    Returns:
+        Tuple ``(observations, states)``: 1-D float64 array of length *T*
+        and 1-D int64 state-index array of length *T*.
+
+    Raises:
+        ValueError: If *T* is negative.
+        RuntimeError: If pi or a visited transition row sums to zero.
+    """
+    if T < 0:
+        raise ValueError("T must be >= 0")
+    if seed is None:
+        return _core.sample(hmm, T)
+    return _core.sample(hmm, T, int(seed))
+
+
+def fit_best_of_n(
+    hmm: Hmm,
+    sequences: Iterable[np.ndarray],
+    n_restarts: int,
+    seed: int = 42,
+    max_iters: int = 500,
+) -> float:
+    """Multi-restart Baum-Welch: train from *n_restarts* starts, keep the best.
+
+    Restart 0 trains from the current parameters unrandomised, so the result
+    is by construction at least as good as a single training run.  Restarts
+    1..n-1 refit each state's emission to a small random subsample of the
+    pooled observations before training.  The best model (by total
+    forward-backward log-likelihood over all sequences) is copied back into
+    *hmm* in place.
+
+    Args:
+        hmm: The model to train.  Mutated in place with the best result.
+        sequences: Iterable of 1-D array-like observation sequences.
+        n_restarts: Total number of starts, including the unrandomised
+            restart 0.  Must be >= 1.
+        seed: Integer RNG seed; a fixed seed gives a reproducible restart
+            set per platform (default 42).
+        max_iters: Baum-Welch iteration cap per restart (default 500).
+
+    Returns:
+        Total log-likelihood of the best model found.
+
+    Raises:
+        ValueError: If *sequences* is empty or *n_restarts* < 1.
+        RuntimeError: If every restart failed to train.
+    """
+    if n_restarts < 1:
+        raise ValueError("n_restarts must be >= 1")
+    return _core.fit_best_of_n(
+        hmm, _as_sequence_list(sequences), int(n_restarts), int(seed), int(max_iters)
+    )
+
+
+def initialize_topology(hmm: Hmm, topology: HmmTopology, max_skip: int = 1) -> None:
+    """Initialise a topology-constrained transition matrix.
+
+    Overwrites the transition matrix: uniform over the topology's valid
+    transitions, exactly 0 elsewhere.  Only the transition matrix is
+    touched — set pi separately (a left-to-right model conventionally
+    starts with a point mass on state 0).
+
+    Args:
+        hmm: Model whose transition matrix is replaced.
+        topology: Structural topology (:class:`HmmTopology`).
+        max_skip: Band half-width for ``LeftToRightSkip`` / ``Banded``
+            (>= 1).  Ignored for ``Ergodic`` and ``LeftToRight``.
+
+    Raises:
+        ValueError: If *max_skip* < 1 for a topology that uses it.
+    """
+    _core.initialize_topology(hmm, topology, int(max_skip))
+
+
+def enforce_topology(hmm: Hmm, topology: HmmTopology, max_skip: int = 1) -> None:
+    """Re-impose a topology on the transition matrix after an M-step.
+
+    Zeroes every structurally invalid entry and renormalises each row over
+    its valid entries; a row whose valid mass is numerically zero is reset
+    to uniform over its valid entries.  Calling this after each ``train()``
+    iteration is cheap and makes the constraint unconditional.
+
+    Args:
+        hmm: Model whose transition matrix is masked in place.
+        topology: Structural topology (must match the one initialised).
+        max_skip: Band half-width for ``LeftToRightSkip`` / ``Banded``
+            (>= 1).
+
+    Raises:
+        ValueError: If *max_skip* < 1 for a topology that uses it.
+    """
+    _core.enforce_topology(hmm, topology, int(max_skip))
+
+
+# =============================================================================
 # v4 Multivariate API
 # =============================================================================
 
@@ -717,6 +856,116 @@ def count_free_parameters_mv(hmm: HmmMV) -> int:
     return _core.count_free_parameters_mv(hmm)
 
 
+def clone_hmm_mv(hmm: HmmMV) -> HmmMV:
+    """Explicit deep copy of a multivariate HMM.
+
+    Emission slots that are still unset in *hmm* stay unset in the copy
+    (matching the libhmm ``clone()`` contract).
+
+    Args:
+        hmm: The model to copy.
+
+    Returns:
+        Independent :class:`HmmMV` with copied pi, transition matrix, and
+        cloned emission distributions.
+    """
+    core = _core.clone_hmm_mv(hmm)
+    result = HmmMV(core.num_states)
+    result.set_pi(core.get_pi())
+    result.set_trans(core.get_trans())
+    for i in range(core.num_states):
+        try:
+            result.set_distribution(i, core.get_distribution(i))
+        except RuntimeError:
+            pass  # unset emission slot: stays unset in the copy
+    return result
+
+
+def sample_mv(hmm: HmmMV, T: int, seed: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Sample one observation sequence of length *T* from a multivariate HMM.
+
+    Same chain as :func:`sample`; each observation is one D-dimensional row
+    drawn from the current state's emission distribution.  All states must
+    have distributions set and agree on dimension.
+
+    Args:
+        hmm: The model to sample from.  pi, the transition matrix, and all
+            emission distributions must have been set.
+        T: Sequence length.  Must be >= 0.
+        seed: Integer RNG seed for a reproducible draw.  ``None`` (default)
+            uses the module-level non-deterministic RNG.
+
+    Returns:
+        Tuple ``(observations, states)``: 2-D float64 array of shape
+        ``(T, D)`` and 1-D int64 state-index array of length *T*.
+
+    Raises:
+        ValueError: If *T* is negative.
+        RuntimeError: If pi or a visited transition row sums to zero, or an
+            emission slot is unset.
+    """
+    if T < 0:
+        raise ValueError("T must be >= 0")
+    if seed is None:
+        return _core.sample_mv(hmm, T)
+    return _core.sample_mv(hmm, T, int(seed))
+
+
+def fit_best_of_n_mv(
+    hmm: HmmMV,
+    sequences,
+    n_restarts: int,
+    seed: int = 42,
+    max_iters: int = 500,
+) -> float:
+    """Multi-restart Baum-Welch for a multivariate HMM.
+
+    Restart 0 trains from the current parameters unrandomised; restarts
+    1..n-1 re-seed the emissions via k-means++ (:func:`kmeans_init`) before
+    training.  The best model (by total forward-backward log-likelihood) is
+    copied back into *hmm* in place.
+
+    Args:
+        hmm: The model to train.  Mutated in place with the best result.
+        sequences: Iterable of 2-D array-like sequences, each shape
+            ``(T_i, D)``.
+        n_restarts: Total number of starts, including the unrandomised
+            restart 0.  Must be >= 1.
+        seed: Integer RNG seed; a fixed seed gives a reproducible restart
+            set per platform (default 42).
+        max_iters: Baum-Welch iteration cap per restart (default 500).
+
+    Returns:
+        Total log-likelihood of the best model found.
+
+    Raises:
+        ValueError: If *sequences* is empty or *n_restarts* < 1.
+        RuntimeError: If every restart failed to train.
+    """
+    if n_restarts < 1:
+        raise ValueError("n_restarts must be >= 1")
+    return _core.fit_best_of_n_mv(
+        hmm, _as_mv_sequence_list(sequences), int(n_restarts), int(seed), int(max_iters)
+    )
+
+
+def initialize_topology_mv(hmm: HmmMV, topology: HmmTopology, max_skip: int = 1) -> None:
+    """Initialise a topology-constrained transition matrix on an MV HMM.
+
+    See :func:`initialize_topology` — identical semantics; only the
+    transition matrix is touched, pi stays the caller's responsibility.
+    """
+    _core.initialize_topology_mv(hmm, topology, int(max_skip))
+
+
+def enforce_topology_mv(hmm: HmmMV, topology: HmmTopology, max_skip: int = 1) -> None:
+    """Re-impose a topology on an MV HMM's transition matrix after an M-step.
+
+    See :func:`enforce_topology` — identical semantics.
+    """
+    _core.enforce_topology_mv(hmm, topology, int(max_skip))
+
+
 __all__ = [
     # Scalar API (v3 compatible)
     "BaumWelchTrainer",
@@ -740,19 +989,25 @@ __all__ = [
     "SegmentalKMeansTrainer",
     "StudentT",
     "TrainingConfig",
+    "HmmTopology",
     "Uniform",
     "ViterbiCalculator",
     "ViterbiTrainer",
     "VonMises",
     "Weibull",
+    "clone_hmm",
     "compute_aic",
     "compute_aicc",
     "compute_bic",
     "count_free_parameters",
+    "enforce_topology",
     "evaluate_model",
+    "fit_best_of_n",
     "from_json",
+    "initialize_topology",
     "load_hmm",
     "load_json",
+    "sample",
     "save_hmm",
     "save_json",
     "to_json",
@@ -770,10 +1025,15 @@ __all__ = [
     "MVMapBaumWelchTrainer",
     "MVSegmentalKMeansTrainer",
     "MVViterbiCalculator",
+    "clone_hmm_mv",
     "count_free_parameters_mv",
+    "enforce_topology_mv",
+    "fit_best_of_n_mv",
     "from_json_mv",
+    "initialize_topology_mv",
     "kmeans_init",
     "load_json_mv",
+    "sample_mv",
     "save_json_mv",
     "to_json_mv",
 ]

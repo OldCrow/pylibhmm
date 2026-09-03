@@ -68,6 +68,48 @@ Most distributions also expose:
 - `load_hmm(filepath)`
 - `save_hmm(hmm, filepath)`
 
+## Model-level operations (v0.12.0, libhmm v4.4.0)
+
+Scalar and multivariate variants share semantics; the MV names carry an
+`_mv` suffix and take an `HmmMV`.
+
+- `clone_hmm(hmm) -> Hmm` / `clone_hmm_mv(hmm) -> HmmMV`
+  — explicit deep copy (libhmm deletes the HMM copy constructor to keep
+  the cost visible). MV emission slots that are unset stay unset.
+
+- `sample(hmm, T, seed=None) -> (observations, states)` /
+  `sample_mv(hmm, T, seed=None)`
+  — draw one sequence of length `T`: 1-D `float64` observations (scalar)
+  or `(T, D)` (MV), plus an `int64` state path. `seed` gives a
+  reproducible draw; `None` uses a non-deterministic module-level RNG.
+  Raises `RuntimeError` if pi or a visited transition row sums to zero.
+
+- `fit_best_of_n(hmm, sequences, n_restarts, seed=42, max_iters=500) -> float` /
+  `fit_best_of_n_mv(...)`
+  — multi-restart Baum-Welch; keeps the best model by total
+  forward-backward log-likelihood and copies it into `hmm` in place.
+  Restart 0 trains from the current parameters unrandomised, so the
+  result is at least as good as a single run. Scalar restarts refit
+  emissions to small random subsamples; MV restarts re-seed via
+  k-means++. Returns the best total log-likelihood.
+
+- `HmmTopology` — enum: `Ergodic`, `LeftToRight`, `LeftToRightSkip`,
+  `Banded`.
+
+- `initialize_topology(hmm, topology, max_skip=1)` /
+  `initialize_topology_mv(...)`
+  — overwrite the transition matrix: uniform over the topology's valid
+  transitions, exactly 0 elsewhere. Only the transition matrix is
+  managed — pi stays the caller's responsibility (a left-to-right model
+  conventionally starts with a point mass on state 0).
+
+- `enforce_topology(hmm, topology, max_skip=1)` /
+  `enforce_topology_mv(...)`
+  — re-impose the mask after an M-step: zero invalid entries,
+  renormalise rows, reset a row with no remaining valid mass to uniform
+  over its valid entries. Cheap; call after each `train()` iteration to
+  make the constraint unconditional.
+
 ---
 
 ## Multivariate API (v0.6.0)

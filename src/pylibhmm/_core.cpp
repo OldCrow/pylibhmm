@@ -87,8 +87,10 @@
 #include <libhmm/io/hmm_json.h>
 #include <libhmm/io/xml_file_reader.h>
 #include <libhmm/io/xml_file_writer.h>
+#include <libhmm/topology.h>
 #include <libhmm/training/basic_baum_welch_trainer.h>
 #include <libhmm/training/baum_welch_trainer.h>
+#include <libhmm/training/fit_best_of_n.h>
 #include <libhmm/training/kmeans_init.h>
 #include <libhmm/training/map_baum_welch_trainer.h>
 #include <libhmm/training/model_selection.h>
@@ -917,6 +919,106 @@ void bind_model_selection(nb::module_ &m) {
 }
 
 // ---------------------------------------------------------------------------
+// bind_model_ops — v4.4.0 model-level API (scalar): clone_hmm, sample,
+// fit_best_of_n, and topology constraints (libhmm #43-#46).
+// ---------------------------------------------------------------------------
+void bind_model_ops(nb::module_ &m) {
+    nb::enum_<HmmTopology>(m, "HmmTopology",
+                           "Structural transition-matrix topologies. A topology declares "
+                           "which transitions are structurally possible; invalid transitions "
+                           "are held at exactly zero. Only the transition matrix is managed — "
+                           "pi stays the caller's responsibility.")
+        .value("Ergodic", HmmTopology::Ergodic,
+               "Fully connected: every transition valid (the BasicHmm default).")
+        .value("LeftToRight", HmmTopology::LeftToRight,
+               "Left-to-right (Bakis): any forward jump and the self-loop are valid; "
+               "max_skip is ignored.")
+        .value("LeftToRightSkip", HmmTopology::LeftToRightSkip,
+               "Left-to-right with bounded skip: valid j in [i, i+max_skip]; "
+               "max_skip = 1 is the strict sequential chain.")
+        .value("Banded", HmmTopology::Banded,
+               "Band-diagonal: valid j in [i-max_skip, i+max_skip].");
+
+    m.def("clone_hmm",
+          [](const Hmm &h) { return libhmm::clone_hmm(h); },
+          nb::arg("hmm"),
+          "Explicit deep copy of a scalar HMM: independent pi, transition matrix, "
+          "and cloned emission distributions.");
+
+    m.def("sample",
+          [](const Hmm &h, std::size_t T) -> nb::tuple {
+              std::pair<ObservationSet, StateSequence> res;
+              {
+                  nb::gil_scoped_release release;
+                  res = libhmm::sample(h, T, g_rng);
+              }
+              return nb::make_tuple(observation_set_to_numpy(res.first),
+                                    state_sequence_to_numpy(res.second));
+          },
+          nb::arg("hmm"),
+          nb::arg("T"),
+          "Sample one observation sequence of length T from a scalar HMM "
+          "(non-deterministic; uses the module-level RNG). Returns "
+          "(observations, states).");
+    m.def("sample",
+          [](const Hmm &h, std::size_t T, uint64_t seed) -> nb::tuple {
+              std::mt19937_64 rng{seed};
+              std::pair<ObservationSet, StateSequence> res;
+              {
+                  nb::gil_scoped_release release;
+                  res = libhmm::sample(h, T, rng);
+              }
+              return nb::make_tuple(observation_set_to_numpy(res.first),
+                                    state_sequence_to_numpy(res.second));
+          },
+          nb::arg("hmm"),
+          nb::arg("T"),
+          nb::arg("seed"),
+          "Sample one observation sequence of length T from a scalar HMM using the "
+          "given integer seed (reproducible). Returns (observations, states).");
+
+    m.def("fit_best_of_n",
+          [](Hmm &h, const nb::list &sequences, std::size_t n_restarts, uint64_t seed,
+             std::size_t max_iters) {
+              auto lists = observation_lists_from_python(sequences);
+              std::mt19937_64 rng{seed};
+              nb::gil_scoped_release release;
+              return libhmm::fit_best_of_n(h, lists, n_restarts, rng, max_iters);
+          },
+          nb::arg("hmm"),
+          nb::arg("sequences"),
+          nb::arg("n_restarts"),
+          nb::arg("seed") = uint64_t{42},
+          nb::arg("max_iters") = std::size_t{500},
+          "Multi-restart Baum-Welch: train from n_restarts independent starts, keep "
+          "the best by total log-likelihood (mutates hmm in place; restart 0 trains "
+          "from the current parameters unrandomised). Returns the best total "
+          "log-likelihood.\n"
+          "sequences: list of 1-D float64 NumPy arrays.");
+
+    m.def("initialize_topology",
+          [](Hmm &h, HmmTopology topo, int max_skip) {
+              libhmm::initialize_topology(h, topo, max_skip);
+          },
+          nb::arg("hmm"),
+          nb::arg("topology"),
+          nb::arg("max_skip") = 1,
+          "Overwrite the transition matrix with a uniform stochastic matrix over the "
+          "topology's valid transitions. Only the transition matrix is touched — set "
+          "pi separately.");
+    m.def("enforce_topology",
+          [](Hmm &h, HmmTopology topo, int max_skip) {
+              libhmm::enforce_topology(h, topo, max_skip);
+          },
+          nb::arg("hmm"),
+          nb::arg("topology"),
+          nb::arg("max_skip") = 1,
+          "Re-impose a topology after an M-step: zero invalid entries and renormalise "
+          "each row over its valid entries; a row with no remaining mass is reset to "
+          "uniform over its valid entries.");
+}
+
+// ---------------------------------------------------------------------------
 // MV clone registry and helper.
 // ---------------------------------------------------------------------------
 using MVEmissionDist = BasicEmissionDistribution<ObservationVectorView>;
@@ -1385,6 +1487,91 @@ void bind_mv_io(nb::module_ &m) {
           "Count the free parameters of a fitted MV HMM.");
 }
 
+// ---------------------------------------------------------------------------
+// bind_mv_model_ops — v4.4.0 model-level API (multivariate): clone_hmm_mv,
+// sample_mv, fit_best_of_n_mv, and topology constraints (libhmm #43-#46).
+// The HmmTopology enum is shared with the scalar API (bind_model_ops).
+// ---------------------------------------------------------------------------
+void bind_mv_model_ops(nb::module_ &m) {
+    m.def("clone_hmm_mv",
+          [](const HmmMV &h) { return libhmm::clone_hmm(h); },
+          nb::arg("hmm"),
+          "Explicit deep copy of an MV HMM: independent pi, transition matrix, and "
+          "cloned emission distributions. Emission slots that are still null stay "
+          "null in the copy.");
+
+    m.def("sample_mv",
+          [](const HmmMV &h, std::size_t T) -> nb::tuple {
+              std::pair<ObservationMatrix, StateSequence> res;
+              {
+                  nb::gil_scoped_release release;
+                  res = libhmm::sample(h, T, g_rng);
+              }
+              return nb::make_tuple(obs_matrix_to_numpy(res.first),
+                                    state_sequence_to_numpy(res.second));
+          },
+          nb::arg("hmm"),
+          nb::arg("T"),
+          "Sample one observation sequence of length T from an MV HMM "
+          "(non-deterministic; uses the module-level RNG). Returns "
+          "(observations (T×D), states).");
+    m.def("sample_mv",
+          [](const HmmMV &h, std::size_t T, uint64_t seed) -> nb::tuple {
+              std::mt19937_64 rng{seed};
+              std::pair<ObservationMatrix, StateSequence> res;
+              {
+                  nb::gil_scoped_release release;
+                  res = libhmm::sample(h, T, rng);
+              }
+              return nb::make_tuple(obs_matrix_to_numpy(res.first),
+                                    state_sequence_to_numpy(res.second));
+          },
+          nb::arg("hmm"),
+          nb::arg("T"),
+          nb::arg("seed"),
+          "Sample one observation sequence of length T from an MV HMM using the "
+          "given integer seed (reproducible). Returns (observations (T×D), states).");
+
+    m.def("fit_best_of_n_mv",
+          [](HmmMV &h, const nb::list &sequences, std::size_t n_restarts, uint64_t seed,
+             std::size_t max_iters) {
+              auto lists = multi_obs_lists_from_python(sequences);
+              std::mt19937_64 rng{seed};
+              nb::gil_scoped_release release;
+              return libhmm::fit_best_of_n(h, lists, n_restarts, rng, max_iters);
+          },
+          nb::arg("hmm"),
+          nb::arg("sequences"),
+          nb::arg("n_restarts"),
+          nb::arg("seed") = uint64_t{42},
+          nb::arg("max_iters") = std::size_t{500},
+          "Multi-restart Baum-Welch for an MV HMM: train from n_restarts independent "
+          "starts (restarts 1..n-1 re-seed emissions via k-means++), keep the best by "
+          "total log-likelihood (mutates hmm in place). Returns the best total "
+          "log-likelihood.\n"
+          "sequences: list of 2-D (T×D) float64 NumPy arrays.");
+
+    m.def("initialize_topology_mv",
+          [](HmmMV &h, HmmTopology topo, int max_skip) {
+              libhmm::initialize_topology(h, topo, max_skip);
+          },
+          nb::arg("hmm"),
+          nb::arg("topology"),
+          nb::arg("max_skip") = 1,
+          "Overwrite the MV HMM's transition matrix with a uniform stochastic matrix "
+          "over the topology's valid transitions. Only the transition matrix is "
+          "touched — set pi separately.");
+    m.def("enforce_topology_mv",
+          [](HmmMV &h, HmmTopology topo, int max_skip) {
+              libhmm::enforce_topology(h, topo, max_skip);
+          },
+          nb::arg("hmm"),
+          nb::arg("topology"),
+          nb::arg("max_skip") = 1,
+          "Re-impose a topology on the MV HMM's transition matrix after an M-step "
+          "(see enforce_topology).");
+}
+
 } // namespace
 
 NB_MODULE(_core, m) {
@@ -1395,10 +1582,12 @@ NB_MODULE(_core, m) {
     bind_trainers(m);
     bind_io(m);
     bind_model_selection(m);
+    bind_model_ops(m);
     // v4 multivariate API
     bind_mv_distributions(m);
     bind_hmm_mv(m);
     bind_mv_calculators(m);
     bind_mv_trainers(m);
     bind_mv_io(m);
+    bind_mv_model_ops(m);
 }
