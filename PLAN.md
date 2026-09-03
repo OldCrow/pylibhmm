@@ -14,9 +14,18 @@
   `pyproject.toml` `[tool.pyright]`, venv-aware, not run in CI. Its first
   pass caught `_core.pyi` declaring `save_hmm(filepath, hmm)` while the
   binding and wrapper use `(hmm, filepath)`; stub corrected.
-- Python tooling: ruff adopted (`E`/`F`/`I`/`UP`), config in
-  `pyproject.toml`. `B` (bugbear) deliberately deferred — see Known Gaps.
+- Python tooling: ruff adopted, config in `pyproject.toml`; rules
+  `B`/`E`/`F`/`I`/`UP` (`B` adopted at 0.12.0 after the B017 triage).
   mypy not adopted — see Known Gaps.
+- Parity ledger (2026-09-02): `docs/PARITY.md` records verified binding
+  behavior, intentional divergences, and open items for the
+  libhmm ↔ pylibhmm boundary. Check before / update after any
+  binding-parity review; don't back-fill claims for unaudited surfaces.
+- Windows toolchain (2026-09-02): no CMake generator pin on dev
+  machines — CMake auto-selects the newest installed VS (this machine:
+  VS 2026 / MSVC 14.51 after an in-place 2022 upgrade). Minimum is
+  VS 2022+ with the C++20 workload; toolset reproducibility is CI's
+  job. See AGENTS.md Windows notes.
 - C++ binding tooling: `scripts/lint-cpp.sh` — cppcheck with its own
   invocation (not a copy of libhmm's), requiring `--language=c++` for
   `_common.h` and a path-based suppression for libhmm's own headers.
@@ -189,8 +198,21 @@ can go in green:
 3. #12 wire `ruff check` + `scripts/lint-cpp.sh` into CI. DONE
    2026-09-02: `lint` job added to ci.yml (see Known Gaps for the
    design). Catch-up track complete.
+
+Session close 2026-09-02: the whole track shipped and is green end to
+end — v0.12.0 tagged and released on GitHub, wheels published to PyPI
+(11 files), CI green on every run including the new lint job's first
+two exercises. Two post-tag commits sit on main ahead of the release
+(will ride the next release): the parity ledger (`docs/PARITY.md`,
+c0353c4) and the negative-seed ValueError fix (025133b, 204/204 tests).
+
+Next up:
+- The libhmm adoption-era pin bump when the corvus adoption spike lands
+  upstream (minor if numbers users observe change — the 0.6.x
+  pylibstats precedent). The next release also carries the two post-tag
+  commits above.
 - DEFERRED past the adoption round: #16 mypy (a decision + annotation
   pass; no drift cost to waiting).
-- Then the libhmm adoption-era pin bump when the corvus adoption spike
-  lands upstream (minor if numbers users observe change — the 0.6.x
-  pylibstats precedent).
+- Parity-ledger backlog (no issue filed): pre-0.12.0 surfaces are
+  unaudited in ledger terms; audit opportunistically when touching
+  them. One low-severity open item recorded in the ledger.
