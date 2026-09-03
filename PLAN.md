@@ -23,7 +23,7 @@
   Verified clean as of 2026-07-14.
 
 ## GitHub Synchronization [DERIVED]
-Last reconciled against live GitHub state: 2026-08-23.
+Last reconciled against live GitHub state: 2026-09-02.
 - GitHub is the collaborator-facing source for issues and milestones; this
   PLAN.md is the agent-facing durable project state. Keep both in sync.
 - When creating, closing, reopening, retitling, or moving a GitHub issue or
@@ -45,12 +45,17 @@ Last reconciled against live GitHub state: 2026-08-23.
 - None currently exist in this repository (checked 2026-07-14).
 
 ## GitHub Issues Without Milestone [DERIVED]
-- Open issues: 4 as of 2026-07-24 (opened in the tooling-setup pass
-  from its Known Gaps, none assigned a milestone yet):
+- Open issues: 6 as of 2026-09-02 (four from the tooling-setup pass, two
+  feature issues filed 2026-09-02 for the libhmm v4.4.0 binding gap; none
+  assigned a milestone):
   - #12 Wire ruff check and lint-cpp.sh into CI
   - #13 Run deferred ruff format pass across Python surface
   - #14 Triage B017 blind-exception test assertions, then enable ruff B rule
   - #16 Adopt mypy: annotate __init__.py wrapper surface
+  - #25 Bind libhmm v4.4.0 model-level API: clone(), sample(),
+    fit_best_of_n() (filed 2026-09-02)
+  - #26 Bind libhmm v4.4.0 topology constraints (HmmTopology,
+    initialize_topology, enforce_topology) (filed 2026-09-02)
 - Closed issues: 5 as of 2026-07-24 (#15 closed — pin-currency CI job
   implemented, see Cross-Repo Dependencies; fetch full list via
   `gh issue list --state closed --json number,title,milestone -q
@@ -107,9 +112,10 @@ documented throws (out-span guard, StudentT μ, JSON pi/trans validation),
 which surface through the bindings as the C++ exceptions nanobind already
 translates. Release status: see the tag/PyPI record in CHANGELOG v0.11.1.
 
-Still outstanding from the v4.4.0 bump: libhmm's v4.4.0 API additions
-(topology constraints, `fit_best_of_n()`, `sample()`, `clone()`) are not
-yet bound — file as feature issues.
+From the v4.4.0 bump: libhmm's v4.4.0 API additions (topology
+constraints, `fit_best_of_n()`, `sample()`, `clone()`) are not yet bound —
+FILED 2026-09-02 as #25 (model-level API) and #26 (topology); together
+they ship as pylibhmm 0.12.0 (minor — new surface).
 
 **Done 2026-08-16 at the libhmm v4.3.0 bump**: the seven forced
 `set(... FORCE)` option lines are deleted from the `FetchContent` branch, so
@@ -178,7 +184,21 @@ carries the day-to-day summary; this section stays as the incident record
 behind the rules.
 
 ## Next Steps
-- #12 Decide when to wire `ruff check` and `scripts/lint-cpp.sh` into CI.
-- #13 Run the deferred `ruff format` pass as its own reviewable change.
-- #14 Triage the 5 `B017` blind-exception test assertions, then enable `B`.
-- #16 Annotate `__init__.py` and adopt mypy.
+Bindings catch-up track, decided 2026-09-02 (user delegated the
+catch-up-vs-widen call; catch-up chosen — the C++ fleet is at a natural
+pause after corvus v1.0.0, the v4.4.0 additions are stable shipped API
+that the adoption round will not change, and deferring only stacks the
+gap onto the adoption-era bump, muddying a behavior-change release with
+a feature surface). Order is deliberate — format before feature work so
+the feature diffs are clean, format before CI wiring so a format check
+can go in green:
+1. #13 `ruff format` pass as its own change.
+2. #25 + #26 bind the libhmm v4.4.0 additions → release as 0.12.0
+   (minor). #14's B017 triage can ride this session — writing the new
+   binding tests settles the exact-exception-type question naturally.
+3. #12 wire `ruff check` + `scripts/lint-cpp.sh` into CI.
+- DEFERRED past the adoption round: #16 mypy (a decision + annotation
+  pass; no drift cost to waiting).
+- Then the libhmm adoption-era pin bump when the corvus adoption spike
+  lands upstream (minor if numbers users observe change — the 0.6.x
+  pylibstats precedent).
