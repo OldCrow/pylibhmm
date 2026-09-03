@@ -123,7 +123,7 @@ def run_regime_hmm(returns: np.ndarray, label: str) -> None:
 
     print(f"\n=== pylibhmm {label} results ===")
     print(f"Wall time: {wall_s:.1f} s\n")
-    for state, lbl in zip(order, labels_sorted):
+    for state, lbl in zip(order, labels_sorted, strict=True):
         d = hmm.get_distribution(state)
         print(f"State {state} ({lbl}):  nu={d.nu:6.1f}  mu={d.location:+.5f}  sigma={d.scale:.5f}")
 

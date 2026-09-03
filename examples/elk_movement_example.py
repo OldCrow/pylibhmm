@@ -155,7 +155,9 @@ print(f"{'iter':>6}  {'log-likelihood':>16}  {'delta':>12}")
 print("-" * 38)
 
 t0 = time.perf_counter()
-prev_ll = sum(forward_backward(log_emission(s, a))[2] for s, a in zip(all_steps, all_angles))
+prev_ll = sum(
+    forward_backward(log_emission(s, a))[2] for s, a in zip(all_steps, all_angles, strict=True)
+)
 print(f"{'0':>6}  {prev_ll:>16.3f}  {'(initial)':>12}")
 
 conv_iter = -1
@@ -168,7 +170,7 @@ for it in range(1, 201):
     pi_num = np.zeros(N)
     total_ll = 0.0
 
-    for steps, angles in zip(all_steps, all_angles):
+    for steps, angles in zip(all_steps, all_angles, strict=True):
         logE = log_emission(steps, angles)
         gamma, xi_sum, ll = forward_backward(logE)
         total_ll += ll

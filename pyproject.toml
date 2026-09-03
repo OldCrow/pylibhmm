@@ -52,11 +52,10 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-# "B" (flake8-bugbear) is deliberately deferred: it surfaces 5 B017
-# ("do not assert blind exception") findings in tests/ that need a real
-# decision on the exact exception type each binding raises, not a
-# mechanical fix. Adopt B once those are triaged.
-select = ["E", "F", "I", "UP"]
+# "B" (flake8-bugbear) adopted at 0.12.0: the former B017 findings were
+# triaged — every flagged site raises the nanobind translation of
+# std::invalid_argument, i.e. ValueError, and the tests now assert that.
+select = ["B", "E", "F", "I", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 # Stub files keep idiomatic single-line signatures; wrapping them for a

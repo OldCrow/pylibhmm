@@ -67,9 +67,9 @@ class TestGaussian:
         assert d.std == pytest.approx(2.0)
 
     def test_invalid_sigma(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.Gaussian(sigma=0.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.Gaussian(sigma=-1.0)
 
     def test_sample_finite(self):
@@ -100,9 +100,9 @@ class TestPoisson:
         assert d.lam == pytest.approx(3.0, rel=1e-6)
 
     def test_invalid(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.Poisson(lam=0.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.Poisson(lam=-1.0)
 
     def test_sample_is_nonneg_int(self):
@@ -282,9 +282,9 @@ class TestStudentT:
         assert d.cdf(0.0) == pytest.approx(0.5, rel=1e-4)
 
     def test_invalid(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.StudentT(nu=0.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.StudentT(nu=1.0, location=0.0, scale=0.0)
 
 
@@ -306,9 +306,9 @@ class TestChiSquared:
         assert d.cdf(0.0) == pytest.approx(0.0, abs=1e-10)
 
     def test_invalid(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.ChiSquared(k=0.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.ChiSquared(k=-1.0)
 
 
@@ -392,7 +392,7 @@ class TestVonMises:
         assert d.kappa == pytest.approx(1.0)
 
     def test_invalid_kappa(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             pylibhmm.VonMises(kappa=-1.0)
 
     def test_repr(self):

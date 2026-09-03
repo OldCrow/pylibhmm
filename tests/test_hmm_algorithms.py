@@ -152,7 +152,7 @@ def test_training_config_fields():
 
 
 def test_empty_sequences_raises(simple_hmm):
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         pylibhmm.BaumWelchTrainer(simple_hmm, [])
 
 
@@ -260,7 +260,7 @@ def test_map_baum_welch_zero_pseudo_count_matches_mle(simple_hmm):
 
 
 def test_map_baum_welch_empty_sequences_raises(simple_hmm):
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         pylibhmm.MapBaumWelchTrainer(simple_hmm, [])
 
 
