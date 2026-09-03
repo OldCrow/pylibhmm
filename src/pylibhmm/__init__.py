@@ -37,6 +37,20 @@ import numpy as np
 from . import _core  # pylint: disable=import-self
 
 
+def _as_seed(seed) -> int:
+    """Coerce *seed* to a non-negative int for the uint64 RNG boundary.
+
+    Raises:
+        ValueError: If *seed* is negative — matching the wrapper layer's
+            ValueError idiom for value-range errors, rather than the
+            TypeError nanobind's uint64 conversion would raise.
+    """
+    seed = int(seed)
+    if seed < 0:
+        raise ValueError("seed must be >= 0")
+    return seed
+
+
 def _as_f64_1d(values, name: str) -> np.ndarray:
     """Coerce *values* to a contiguous 1-D float64 array.
 
@@ -536,14 +550,14 @@ def sample(hmm: Hmm, T: int, seed: int | None = None) -> tuple[np.ndarray, np.nd
         and 1-D int64 state-index array of length *T*.
 
     Raises:
-        ValueError: If *T* is negative.
+        ValueError: If *T* or *seed* is negative.
         RuntimeError: If pi or a visited transition row sums to zero.
     """
     if T < 0:
         raise ValueError("T must be >= 0")
     if seed is None:
         return _core.sample(hmm, T)
-    return _core.sample(hmm, T, int(seed))
+    return _core.sample(hmm, T, _as_seed(seed))
 
 
 def fit_best_of_n(
@@ -575,13 +589,13 @@ def fit_best_of_n(
         Total log-likelihood of the best model found.
 
     Raises:
-        ValueError: If *sequences* is empty or *n_restarts* < 1.
+        ValueError: If *sequences* is empty, *n_restarts* < 1, or *seed* is negative.
         RuntimeError: If every restart failed to train.
     """
     if n_restarts < 1:
         raise ValueError("n_restarts must be >= 1")
     return _core.fit_best_of_n(
-        hmm, _as_sequence_list(sequences), int(n_restarts), int(seed), int(max_iters)
+        hmm, _as_sequence_list(sequences), int(n_restarts), _as_seed(seed), int(max_iters)
     )
 
 
@@ -812,7 +826,7 @@ def kmeans_init(hmm: HmmMV, sequences, seed: int = 42) -> None:
         sequences: Iterable of 2-D array-like sequences, each shape ``(T_i, D)``.
         seed: Integer RNG seed for reproducible k-means++ seeding (default 42).
     """
-    _core.kmeans_init(hmm, _as_mv_sequence_list(sequences), int(seed))
+    _core.kmeans_init(hmm, _as_mv_sequence_list(sequences), _as_seed(seed))
 
 
 def to_json_mv(hmm: HmmMV) -> str:
@@ -900,7 +914,7 @@ def sample_mv(hmm: HmmMV, T: int, seed: int | None = None) -> tuple[np.ndarray, 
         ``(T, D)`` and 1-D int64 state-index array of length *T*.
 
     Raises:
-        ValueError: If *T* is negative.
+        ValueError: If *T* or *seed* is negative.
         RuntimeError: If pi or a visited transition row sums to zero, or an
             emission slot is unset.
     """
@@ -908,7 +922,7 @@ def sample_mv(hmm: HmmMV, T: int, seed: int | None = None) -> tuple[np.ndarray, 
         raise ValueError("T must be >= 0")
     if seed is None:
         return _core.sample_mv(hmm, T)
-    return _core.sample_mv(hmm, T, int(seed))
+    return _core.sample_mv(hmm, T, _as_seed(seed))
 
 
 def fit_best_of_n_mv(
@@ -939,13 +953,13 @@ def fit_best_of_n_mv(
         Total log-likelihood of the best model found.
 
     Raises:
-        ValueError: If *sequences* is empty or *n_restarts* < 1.
+        ValueError: If *sequences* is empty, *n_restarts* < 1, or *seed* is negative.
         RuntimeError: If every restart failed to train.
     """
     if n_restarts < 1:
         raise ValueError("n_restarts must be >= 1")
     return _core.fit_best_of_n_mv(
-        hmm, _as_mv_sequence_list(sequences), int(n_restarts), int(seed), int(max_iters)
+        hmm, _as_mv_sequence_list(sequences), int(n_restarts), _as_seed(seed), int(max_iters)
     )
 
 

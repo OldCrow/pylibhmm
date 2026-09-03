@@ -2,7 +2,9 @@
 
 _Last updated: 2026-09-02 (created; first entries cover the v4.4.0
 model-level bindings shipped in pylibhmm 0.12.0, verified against
-libhmm v4.4.1 headers and empirically via the 0.12.0 test suite)._
+libhmm v4.4.1 headers and empirically via the 0.12.0 test suite.
+Same day: negative-seed open item fixed — all five seed-taking wrappers
+now raise ValueError via `_as_seed()`, tested)._
 
 Scope note: surfaces bound before 0.12.0 (distributions, calculators,
 trainers, I/O) have working tests but have not been audited in ledger
@@ -28,11 +30,14 @@ terms; add entries as they are reviewed rather than back-filling claims.
 | RNG parameter | Caller passes a `std::mt19937_64&` engine | Integer `seed` (constructs a fresh engine per call); seedless `sample` uses a thread-local RNG | Established binding precedent (distribution `sample(seed)`, `kmeans_init(seed=42)`); no engine object is exposed anywhere in the binding surface. Consequence: consecutive unseeded/seed-reusing calls cannot share one engine stream the way C++ callers can. |
 | `fit_best_of_n` seed default | No default — engine is a required parameter | `seed=42` default | Matches the `kmeans_init(seed=42)` precedent; deterministic-by-default for training-adjacent randomness. |
 | `HmmTopology` member casing | `Ergodic`, `LeftToRight`, … (C++ enum-class) | Same PascalCase names (not Python UPPER_CASE) | Traceability to upstream docs/issues outweighs PEP 8 enum casing; nanobind enum, not `enum.Enum`. |
-| Negative `T` / `n_restarts` | Unrepresentable (`std::size_t` parameters) | Wrapper raises `ValueError` before the boundary | Python callers can pass negatives; raw nanobind would raise `TypeError` on the implicit conversion — `ValueError` with a clear message is the better Python idiom for a value-range error. |
+| Negative `T` / `n_restarts` / `seed` | Unrepresentable (`std::size_t` / `uint64_t` parameters) | Wrapper raises `ValueError` before the boundary (`_as_seed()` for seeds, covering `sample[_mv]`, `fit_best_of_n[_mv]`, and `kmeans_init`) | Python callers can pass negatives; raw nanobind would raise `TypeError` on the implicit conversion — `ValueError` with a clear message is the better Python idiom for a value-range error. Tested for all five seed sites. |
 
 ## Open / Unresolved
 
 | API surface | Issue | Severity |
 |---|---|---|
-| `sample` / `sample_mv` / `fit_best_of_n[_mv]` `seed` | A negative seed raises nanobind's `TypeError` (uint64 conversion), while NumPy's own seed handling raises `ValueError` — inconsistent with the wrappers' own `ValueError` idiom for range errors. Candidate one-line wrapper check. | Low |
 | `fit_best_of_n[_mv]` all-restarts-failed path | Core rethrows the last restart's exception (or `runtime_error` if none recorded); binding pass-through is untested — hard to trigger deliberately. Mapping is generic nanobind translation, so risk is low, but no test pins it. | Low |
+
+Resolved items: negative-seed `TypeError` inconsistency (2026-09-02) —
+fixed with `_as_seed()` in the wrapper layer; recorded under the
+Intentional Divergences "Negative `T` / `n_restarts` / `seed`" row.

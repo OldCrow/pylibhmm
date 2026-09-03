@@ -107,6 +107,22 @@ class TestSample:
         with pytest.raises(RuntimeError, match="sums to zero"):
             pylibhmm.sample(pylibhmm.Hmm(2), 5, seed=1)
 
+    def test_negative_seed_raises_value_error(self, simple_hmm):
+        # ValueError (wrapper idiom for range errors), not nanobind's
+        # TypeError from the uint64 conversion.
+        mv = _mv_hmm()
+        seqs = [np.array([1.0, 2.0, 3.0])]
+        mv_seqs = [np.zeros((5, 2))]
+        for call in (
+            lambda: pylibhmm.sample(simple_hmm, 5, seed=-1),
+            lambda: pylibhmm.sample_mv(mv, 5, seed=-1),
+            lambda: pylibhmm.fit_best_of_n(simple_hmm, seqs, n_restarts=1, seed=-1),
+            lambda: pylibhmm.fit_best_of_n_mv(mv, mv_seqs, n_restarts=1, seed=-1),
+            lambda: pylibhmm.kmeans_init(mv, mv_seqs, seed=-1),
+        ):
+            with pytest.raises(ValueError, match="seed"):
+                call()
+
     def test_mv_shapes(self):
         hmm = _mv_hmm(dim=3)
         obs, states = pylibhmm.sample_mv(hmm, 20, seed=5)
