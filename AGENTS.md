@@ -21,6 +21,9 @@ Key paths:
 - `src/pylibhmm/__init__.pyi`, `src/pylibhmm/_core.pyi` — type stubs
 - `tests/` — pytest coverage
 - `docs/` — API and contributor docs
+- `docs/PARITY.md` — libhmm ↔ pylibhmm parity ledger (verified behavior,
+  intentional divergences, open items); check it before and update it
+  after any binding-parity review
 
 ## Architecture
 
