@@ -63,6 +63,52 @@ jobs:
         run: pytest tests -v --tb=short
 
   # ---------------------------------------------------------------------------
+  # lint — ruff (check + format) and the C++ binding layer's cppcheck
+  # (GitHub issue #12).  One cheap Linux job; no extension build needed.
+  # ruff is pinned: an unpinned linter turns every ruff release into a
+  # potential red X on an unrelated push (same rationale as the
+  # cibuildwheel pin in wheels.yml) — bump it deliberately.
+  # lint-cpp.sh expects a ../libhmm sibling checkout for headers, so clone
+  # the pinned tag parsed from CMakeLists.txt (the same GIT_TAG the
+  # pin-currency job checks).
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (ruff + cppcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: ruff check and format
+        run: |
+          pip install ruff==0.16.5
+          ruff check src/pylibhmm tests examples
+          ruff format --check src/pylibhmm tests examples
+
+      - name: Clone libhmm headers at the pinned tag
+        env:
+          LIBHMM_REPO: https://github.com/OldCrow/libhmm.git
+        run: |
+          set -euo pipefail
+          pin=$(grep -oE '^[[:space:]]*GIT_TAG[[:space:]]+v[^[:space:]]+' CMakeLists.txt \
+                | awk '{print $2}')
+          if [ -z "${pin}" ]; then
+            echo "::error::could not parse GIT_TAG from CMakeLists.txt"
+            exit 1
+          fi
+          git clone --depth 1 --branch "${pin}" "${LIBHMM_REPO}" ../libhmm
+
+      - name: cppcheck (binding layer)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q cppcheck
+          bash scripts/lint-cpp.sh
+
+  # ---------------------------------------------------------------------------
   # ASan+UBSan run together in this one job (same runner, no extra cost) —
   # builds the extension with -fsanitize=address,undefined and runs pytest
   # under both via LD_PRELOAD.  Linux/GCC only: macOS ASan for Python
@@ -119,10 +165,11 @@ jobs:
   # the pin could silently fall behind a libhmm release indefinitely
   # (GitHub issue #15).
   #
-  # On mismatch this fails deliberately.  Bumping GIT_TAG is not mechanical:
-  # any libhmm release carrying the LIBHMM_* option rename also requires
-  # deleting the seven forced set(... FORCE) lines in the FetchContent
-  # branch of CMakeLists.txt.  See PLAN.md Cross-Repo Dependencies.
+  # On mismatch this fails deliberately.  Before bumping GIT_TAG, check the
+  # libhmm release notes for build-option or CMake changes that need a
+  # matching edit here (the v4.3.0 option rename was one; the seven forced
+  # set(... FORCE) lines it obsoleted are already gone).  See PLAN.md
+  # Cross-Repo Dependencies.
   # ---------------------------------------------------------------------------
   pin-currency:
     name: libhmm pin currency (canary)
@@ -162,8 +209,8 @@ jobs:
 
           if [ "${pin}" != "${latest}" ]; then
             echo "::error::libhmm pin is stale — pinned ${pin}, newest release ${latest}. \
-          Bump GIT_TAG in CMakeLists.txt; if the new tag carries the LIBHMM_* option \
-          rename, also delete the forced set(... FORCE) lines in the FetchContent branch."
+          Bump GIT_TAG in CMakeLists.txt after checking the libhmm release notes for \
+          build-option or CMake changes that need a matching edit."
             exit 1
           fi
           echo "pin is current"

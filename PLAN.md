@@ -45,14 +45,14 @@ Last reconciled against live GitHub state: 2026-09-02.
 - None currently exist in this repository (checked 2026-07-14).
 
 ## GitHub Issues Without Milestone [DERIVED]
-- Open issues: 2 as of 2026-09-02 (none assigned a milestone):
-  - #12 Wire ruff check and lint-cpp.sh into CI
+- Open issues: 1 as of 2026-09-02 (none assigned a milestone):
   - #16 Adopt mypy: annotate __init__.py wrapper surface
-- Closed issues: 9 as of 2026-09-02 (#13 format pass; #14 B017 triage +
-  B rule adopted; #25/#26 v4.4.0 API bound — all shipped in 0.12.0;
-  #15 pin-currency CI job, see Cross-Repo Dependencies; fetch full list
-  via `gh issue list --state closed --json number,title,milestone -q
-  '.[] | select(.milestone == null)'` if ever needed).
+- Closed issues: 10 as of 2026-09-02 (#12 lint-in-CI; #13 format pass;
+  #14 B017 triage + B rule adopted; #25/#26 v4.4.0 API bound — shipped
+  in 0.12.0; #15 pin-currency CI job, see Cross-Repo Dependencies; fetch
+  full list via `gh issue list --state closed --json
+  number,title,milestone -q '.[] | select(.milestone == null)'` if ever
+  needed).
 
 ## In Progress [OPEN]
 - (none currently tracked — populate as work starts)
@@ -64,9 +64,11 @@ Last reconciled against live GitHub state: 2026-09-02.
   have no type hints). Adopting mypy needs an annotation pass across
   `__init__.py` first, not just an empty config. Tracked as GitHub issue
   #16.
-- Neither `ruff check` nor `scripts/lint-cpp.sh` are wired into CI yet
-  (`.github/workflows/ci.yml` only runs pytest + ASan) — no decision
-  recorded on when to add them. Tracked as GitHub issue #12.
+- Lint-in-CI: **closed 2026-09-02** (issue #12). ci.yml's `lint` job runs
+  `ruff check` + `ruff format --check` (ruff version-pinned in the
+  workflow — bump deliberately) and `scripts/lint-cpp.sh` (libhmm headers
+  cloned at the CMakeLists.txt `GIT_TAG` pin). Retained as the record of
+  where lint enforcement lives.
 - Stale FetchContent pin risk: **closed 2026-07-24** (issue #15). This
   repo prefers a local `../libhmm` checkout when present, so the pin could
   silently drift on any machine that always has a fresh local libhmm
@@ -184,7 +186,9 @@ can go in green:
    note: this machine's VS 2022 was upgraded in place to VS 2026 (v18,
    MSVC 14.51); builds verified with CMake generator auto-detection and
    AGENTS.md's hard generator pin dropped (reproducibility is CI's job).
-3. #12 wire `ruff check` + `scripts/lint-cpp.sh` into CI.
+3. #12 wire `ruff check` + `scripts/lint-cpp.sh` into CI. DONE
+   2026-09-02: `lint` job added to ci.yml (see Known Gaps for the
+   design). Catch-up track complete.
 - DEFERRED past the adoption round: #16 mypy (a decision + annotation
   pass; no drift cost to waiting).
 - Then the libhmm adoption-era pin bump when the corvus adoption spike

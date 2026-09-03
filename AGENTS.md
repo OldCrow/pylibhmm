@@ -261,7 +261,7 @@ Release checklist:
 2. CI matrix passes on Linux/macOS/Windows.
 3. API docs and stubs updated.
 4. Wheel portability considerations reviewed against `docs/COMPATIBILITY.md`.
-5. `ruff check` and `scripts/lint-cpp.sh` pass (neither is wired into CI yet — see PLAN.md).
+5. `ruff check`, `ruff format --check`, and `scripts/lint-cpp.sh` pass (all enforced by ci.yml's `lint` job; ruff is version-pinned there — bump it deliberately).
 
 ## Open Items
 See PLAN.md for current status, in-progress work, and open questions.
