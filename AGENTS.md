@@ -78,7 +78,11 @@ without the sibling (e.g. CI).
 
 ## Platform-Specific Notes
 
-### macOS (non-Catalina)
+**Minimum macOS:** 13 Ventura, inherited from `libhmm` v4. Catalina (10.15)
+is not supported; the `LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX`
+option it used was removed in libhmm v4 (see libhmm MIGRATION.md).
+
+### macOS
 
 - `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` at the pinned `GIT_TAG` (see `CMakeLists.txt`) via FetchContent.
 - Ensure the active Python and `libhmm` build target the same architecture.
@@ -87,11 +91,6 @@ without the sibling (e.g. CI).
 python -m pip install -e ".[test]" -Ccmake.build-type=Release
 python -m pytest tests -v --tb=short
 ```
-
-### macOS Catalina (10.15)
-
-- When `pylibhmm` builds local/fetched `libhmm`, avoid Homebrew LLVM/libc++ on Catalina unless explicit troubleshooting is required; use the system AppleClang toolchain. Homebrew sets `CC`/`CXX`/`LDFLAGS` to Homebrew LLVM's libc++, which is ABI-incompatible with the 10.15 deployment target.
-- If you must override the guard for troubleshooting only, pass `-Ccmake.define.LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX=ON`. This flag bypasses the guard that blocks Homebrew libc++ on Catalina; use only when debugging.
 
 ### Linux
 
