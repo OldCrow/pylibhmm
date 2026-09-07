@@ -82,41 +82,30 @@ without the sibling (e.g. CI).
 is not supported; the `LIBHMM_ALLOW_UNSUPPORTED_CATALINA_HOMEBREW_LIBCXX`
 option it used was removed in libhmm v4 (see libhmm MIGRATION.md).
 
-### macOS
-
-- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` at the pinned `GIT_TAG` (see `CMakeLists.txt`) via FetchContent.
-- Ensure the active Python and `libhmm` build target the same architecture.
+Build and test are the same on all three platforms — only the shell differs:
 
 ```bash
 python -m pip install -e ".[test]" -Ccmake.build-type=Release
 python -m pytest tests -v --tb=short
 ```
+
+### macOS
+
+- `pylibhmm` prefers local `../libhmm` when present; otherwise it fetches `libhmm` at the pinned `GIT_TAG` (see `CMakeLists.txt`) via FetchContent.
+- Ensure the active Python and `libhmm` build target the same architecture.
 
 ### Linux
 
 - Requires GCC ≥ 12 or Clang ≥ 14 for C++20 support.
 - If `libhmm` is not found locally, CMake fetches it automatically at the pinned `GIT_TAG` (see `CMakeLists.txt`).
 
-```bash
-python -m pip install -e ".[test]" -Ccmake.build-type=Release
-python -m pytest tests -v --tb=short
-```
-
 ### Windows (MSVC)
 
-- **Minimum toolchain**: Visual Studio 2022 (17.x) or later with the C++
-  desktop workload — any MSVC toolset with full C++20 support. Verified
-  through VS 2026 (v18, MSVC 14.5x). Build Tools or a full IDE edition both
-  work.
+- Toolchain floor and install routes: [WINDOWS-TOOLCHAIN.md §1](https://github.com/OldCrow/standards/blob/main/WINDOWS-TOOLCHAIN.md#1-one-time-setup).
 - Don't pin a generator locally — see
   [WINDOWS-TOOLCHAIN.md §3](https://github.com/OldCrow/standards/blob/main/WINDOWS-TOOLCHAIN.md)
   and [CMAKE-HOUSE-STYLE.md](https://github.com/OldCrow/standards/blob/main/CMAKE-HOUSE-STYLE.md).
 - `libhmm` SIMD selection and resulting binaries are architecture-dependent; keep the architecture check mandatory.
-
-```powershell
-python -m pip install -e ".[test]" -Ccmake.build-type=Release
-python -m pytest tests -v --tb=short
-```
 
 #### Windows toolchain setup
 
