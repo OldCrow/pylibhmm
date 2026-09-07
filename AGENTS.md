@@ -193,6 +193,8 @@ Release checklist:
 - CMake conventions in depth → [CMAKE-HOUSE-STYLE.md](https://github.com/OldCrow/standards/blob/main/CMAKE-HOUSE-STYLE.md).
 - Windows toolchain setup in depth → [WINDOWS-TOOLCHAIN.md](https://github.com/OldCrow/standards/blob/main/WINDOWS-TOOLCHAIN.md).
 - CI/workflow rules fleet-wide → [CI-HOUSE-STYLE.md](https://github.com/OldCrow/standards/blob/main/CI-HOUSE-STYLE.md).
+- What each repo document is for, and how they cross-reference →
+  [DOC-CONVENTIONS.md](https://github.com/OldCrow/standards/blob/main/DOC-CONVENTIONS.md).
 - Session state, decisions, open items → `PLAN.md`.
 
 ## Open Items
