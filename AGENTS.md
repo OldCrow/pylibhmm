@@ -85,27 +85,8 @@ re-running a generator, until that changes.
 
 ## Session Start
 
-**Requires Python ≥ 3.11.** At the start of every session, do these steps in order:
-
-1. Verify machine architecture (OS + CPU) and Python architecture.
-2. Select the platform-specific build path for this host (see Platform-Specific Notes).
-3. Build/install/test only after architecture is confirmed.
-
-Architecture checks:
-
-```bash
-# macOS/Linux shells
-uname -m
-uname -s
-python -c "import platform, struct; print(platform.system(), platform.machine(), struct.calcsize('P')*8)"
-```
-
-```powershell
-# Windows PowerShell
-[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-[System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-python -c "import platform, struct; print(platform.system(), platform.machine(), struct.calcsize('P')*8)"
-```
+**Requires Python ≥ 3.11.** Follow the standard architecture-check ritual:
+[SESSION-START.md](https://github.com/OldCrow/standards/blob/main/SESSION-START.md).
 
 ## Build Commands
 
@@ -169,13 +150,9 @@ python -m pytest tests -v --tb=short
   desktop workload — any MSVC toolset with full C++20 support. Verified
   through VS 2026 (v18, MSVC 14.5x). Build Tools or a full IDE edition both
   work.
-- **Do not pin a generator locally.** CMake's default generator on Windows
-  auto-selects the newest installed Visual Studio, and a hard-coded
-  `CMAKE_GENERATOR="Visual Studio 17 2022"` breaks the moment VS upgrades
-  in place (a 2022→2026 upgrade leaves an empty `2022\` directory behind).
-  Toolset reproducibility belongs to CI, where the runner image pins it.
-  Pass an explicit `-Ccmake.define.CMAKE_GENERATOR="Visual Studio NN YYYY"`
-  only to troubleshoot generator selection itself.
+- Don't pin a generator locally — see
+  [WINDOWS-TOOLCHAIN.md §3](https://github.com/OldCrow/standards/blob/main/WINDOWS-TOOLCHAIN.md)
+  and [CMAKE-HOUSE-STYLE.md](https://github.com/OldCrow/standards/blob/main/CMAKE-HOUSE-STYLE.md).
 - `libhmm` SIMD selection and resulting binaries are architecture-dependent; keep the architecture check mandatory.
 
 ```powershell
@@ -185,20 +162,12 @@ python -m pytest tests -v --tb=short
 
 #### Windows toolchain setup
 
-No per-session activation is needed: the Visual Studio CMake generator
-locates its own toolchain, so `vcvars64.bat` activation is only required
-for non-VS generators (e.g. Ninja) or for running `cl.exe` directly.
-
-**One-time setup:**
-- Visual Studio Build Tools (not full IDE) is sufficient: `winget install
-  Microsoft.VisualStudio.2022.BuildTools` (or newer), `choco install
-  visualstudio2022buildtools`, or the installer from
-  https://visualstudio.microsoft.com/downloads/. Any 2022-or-later
-  edition works; paths vary by version and edition (e.g.
-  `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\`,
-  `C:\Program Files\Microsoft Visual Studio\18\Community\`).
-- **Smart App Control must be Off** (Windows Security → App & Browser Control → SAC settings). SAC blocks locally compiled executables and cannot be re-enabled without a Windows reset.
-- CMake ≥ 3.25: https://cmake.org/download/, `winget install Kitware.CMake`, or `choco install cmake`. (Generator support for a new VS major version needs a correspondingly new CMake — VS 2026 needs CMake ≥ 4.1.)
+pylibhmm needs no per-session `vcvars` activation: the Visual Studio CMake
+generator locates its own toolchain (the "VS generator" case in
+[WINDOWS-TOOLCHAIN.md](https://github.com/OldCrow/standards/blob/main/WINDOWS-TOOLCHAIN.md) —
+not the case that requires activation, which applies only to non-VS
+generators or direct `cl.exe` use). See that doc for one-time setup, the
+Smart App Control note, and the CMake version requirement.
 
 ## Coding Conventions
 
@@ -210,31 +179,26 @@ for non-VS generators (e.g. Ninja) or for running `cl.exe` directly.
 ### Linting
 
 **Python** (`src/pylibhmm/__init__.py`, `tests/`, `examples/`): ruff, config
-in `pyproject.toml`. Rules: `B`/`E`/`F`/`I`/`UP`. `B` (flake8-bugbear) was
-adopted at 0.12.0 after the B017 triage: every formerly-blind
-`pytest.raises(Exception)` site raises the nanobind translation of
-`std::invalid_argument`, i.e. `ValueError`, and the tests assert that
-exact type. `.pyi` stub files are exempt from the line-length rule
-since compact single-line signatures are the idiomatic stub style.
+in `pyproject.toml`. Rules: `B`/`E`/`F`/`I`/`UP` — `B` (flake8-bugbear) was
+adopted at 0.12.0 after confirming every previously-blind
+`pytest.raises(Exception)` site actually raises `ValueError` (nanobind's
+translation of `std::invalid_argument`); tests now assert that exact type.
+`.pyi` stubs are exempt from the line-length rule (compact single-line
+signatures are idiomatic there).
 ```bash
 ruff check src/pylibhmm tests examples
 ruff format src/pylibhmm tests examples   # applied repo-wide at v0.11.1+ (issue #13)
 ```
-pyright runs via the editor/agent language server only, not CI:
-`[tool.pyright]` in `pyproject.toml` points it at `.venv` so `numpy` and
-the editable install resolve, and silences the "no source" warning for the
-compiled `_core` module. Baseline: `pyright src/pylibhmm` reports 0 errors.
-
-mypy is not adopted — `__init__.py`'s wrapper methods are only partially
-annotated today, so enabling it would require a real annotation pass
-first rather than just adding config (see PLAN.md Known Gaps).
+pyright runs via the editor/agent language server only, not CI (`[tool.pyright]`
+points it at `.venv` so `numpy` and the editable install resolve); baseline
+is 0 errors. mypy is not adopted — `__init__.py` is only partially annotated,
+so enabling it needs a real annotation pass first (see PLAN.md Known Gaps).
 
 **C++ binding layer** (`_core.cpp`, `_common.h`): its own cppcheck
-invocation, `scripts/lint-cpp.sh` — not a copy of libhmm's, because (a)
-`_common.h` is a header and needs `--language=c++` explicit or cppcheck
-misparses it as C, and (b) findings from libhmm's own headers (reached via
-`-I`) are suppressed by path, since those are libhmm's concern. The
-suppression list otherwise matches libhmm's.
+invocation, `scripts/lint-cpp.sh`, not a copy of libhmm's — it needs
+`--language=c++` explicit (cppcheck misparses `_common.h` as C otherwise)
+and suppresses findings from libhmm's own headers by path (libhmm's
+concern, not this repo's). Suppression list otherwise matches libhmm's.
 ```bash
 bash scripts/lint-cpp.sh
 ```
