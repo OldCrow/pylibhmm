@@ -169,16 +169,9 @@ hosted runners, action pinning, wheel builds):
 
 Wheel builds follow the fleet wheel contract
 ([CI House Style §9](https://github.com/OldCrow/standards/blob/main/CI-HOUSE-STYLE.md#9-wheel-builds-pylibhmm-pylibstats)),
-settled here at v0.10.0: `CIBW_BUILD` is an allowlist *defined* as the
-interpreters `ci.yml` tests; `requires-python` moves in the same change as
-the built set (0.9.2/0.9.3 declared `>= 3.11` while shipping no cp311
-wheel — the incident behind the rule); the cp312 wheel is Stable ABI, and
-`wheel.py-api` in `pyproject.toml` plus `SKBUILD_SABI_COMPONENT` in CMake
-are one mechanism in two files — set both, or the result is an
-abi3-tagged, version-locked wheel that cibuildwheel is structurally
-unable to catch; cibuildwheel is pinned. `musllinux` stays a `CIBW_SKIP`
-entry (an ABI axis orthogonal to the interpreter set, applied after
-BUILD).
+settled here at v0.10.0. §9 carries the rules and the incidents behind them,
+this repo's 0.9.2/0.9.3 `requires-python` mismatch included. Do not restate
+them here — the standard is the single copy.
 
 Release checklist:
 
