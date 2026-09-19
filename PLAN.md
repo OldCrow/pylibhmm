@@ -78,11 +78,12 @@ Last reconciled against live GitHub state: 2026-09-02.
   needed).
 
 ## In Progress [OPEN]
-- **0.12.1 in PR #30** (2026-09-19, travel session): mypy adoption (#16),
-  two stub corrections (`ModelCriteria` NamedTuple; `load_hmm` returns raw
-  `_core.Hmm`), version bump and CHANGELOG. Typing-only patch, same libhmm
-  pin. Owed after merge: signed tag v0.12.1 [user-approved each time],
-  GitHub release, wheels check. Open question, not filed: whether
+- **0.12.1 SHIPPED 2026-09-19** (travel session): PR #30 squash-merged
+  (`7d6351b`), main CI green, signed tag v0.12.1 pushed [user-approved],
+  wheels green on all five targets + sdist, PyPI 0.12.1 live, GitHub
+  release published. Typing-only patch, same libhmm pin: mypy adopted
+  (#16 closed) and two stub corrections (`ModelCriteria` NamedTuple;
+  `load_hmm` returns raw `_core.Hmm`). Open question, not filed: whether
   `load_hmm` SHOULD rebuild the validating wrapper like `load_json` — it
   is the deprecated XML path, so documenting may be the whole answer.
 - (none currently tracked — populate as work starts)
