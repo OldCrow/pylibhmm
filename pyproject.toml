@@ -13,6 +13,10 @@ dependencies = ["numpy>=1.22"]
 
 [project.optional-dependencies]
 test = ["pytest>=7.0"]
+# ruff is pinned directly in ci.yml (not sourced from here) so its version
+# bump stays deliberate there; mypy is listed here too for local dev parity
+# with the CI pin (see ci.yml's lint job).
+lint = ["mypy==2.3.1"]
 
 [tool.scikit-build]
 # Build one CPython Stable ABI (abi3) wheel covering 3.12 and every later
@@ -42,6 +46,25 @@ venvPath = "."
 venv = ".venv"
 # _core is a compiled extension with a hand-written .pyi and no .py source.
 reportMissingModuleSource = false
+
+[tool.mypy]
+# `files` must name the .py file explicitly, not the `src/pylibhmm`
+# directory: __init__.pyi sits next to __init__.py, and mypy's stub-shadowing
+# rule means a directory/package target resolves to the .pyi and silently
+# skips checking the .py body. Passing the .py path directly (like a CLI
+# argument) is what forces mypy to actually check the implementation.
+files = ["src/pylibhmm/__init__.py"]
+python_version = "3.12"  # matches requires-python's floor
+# Not full `strict`: strict also wants disallow_untyped_calls,
+# disallow_any_generics, no_implicit_reexport, etc., which would ripple into
+# every _core.pyi call site for limited benefit right now. These five options
+# are the ones that directly serve issue #16 (require and check annotations)
+# plus common footguns (silent Any returns, stale ignores, no-op casts).
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

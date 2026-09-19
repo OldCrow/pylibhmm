@@ -138,8 +138,15 @@ ruff format src/pylibhmm tests examples   # applied repo-wide at v0.11.1+ (issue
 ```
 pyright runs via the editor/agent language server only, not CI (`[tool.pyright]`
 points it at `.venv` so `numpy` and the editable install resolve); baseline
-is 0 errors. mypy is not adopted — `__init__.py` is only partially annotated,
-so enabling it needs a real annotation pass first (see PLAN.md Known Gaps).
+is 0 errors. mypy is adopted (issue #16) and runs in CI (`[tool.mypy]` in
+`pyproject.toml`): it targets `src/pylibhmm/__init__.py` explicitly, not the
+`src/pylibhmm` directory — `__init__.pyi` sits next to it, and mypy's
+stub-shadowing rule means a directory/package target resolves to the `.pyi`
+and silently skips the `.py` body. `disallow_untyped_defs` and
+`check_untyped_defs` are on; not full `strict`.
+```bash
+mypy
+```
 
 **C++ binding layer** (`_core.cpp`, `_common.h`): its own cppcheck
 invocation, `scripts/lint-cpp.sh`, not a copy of libhmm's — it needs

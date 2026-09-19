@@ -16,7 +16,18 @@
   binding and wrapper use `(hmm, filepath)`; stub corrected.
 - Python tooling: ruff adopted, config in `pyproject.toml`; rules
   `B`/`E`/`F`/`I`/`UP` (`B` adopted at 0.12.0 after the B017 triage).
-  mypy not adopted — see Known Gaps.
+  mypy adopted 2026-09-19 (issue #16): `[tool.mypy]` targets
+  `src/pylibhmm/__init__.py` explicitly (not the `src/pylibhmm` directory —
+  `__init__.pyi` shadows it under mypy's normal package resolution, which
+  would silently skip the `.py` body); `disallow_untyped_defs` +
+  `check_untyped_defs` + `warn_unused_ignores` + `warn_redundant_casts` +
+  `warn_return_any`, not full `strict`. Runs in ci.yml's `lint` job next to
+  ruff. Zero `type: ignore` needed. Fixed two `__init__.pyi` mismatches
+  found during the pass: `load_hmm()` returns the raw `_core.Hmm` (it does
+  not reconstruct the validating `Hmm` wrapper the way `from_json`/
+  `load_json` do) — stub corrected to `_core.Hmm`; `ModelCriteria` is a
+  `typing.NamedTuple` at runtime but the stub declared a plain class with a
+  `__new__` — stub corrected to subclass `NamedTuple`.
 - Parity ledger (2026-09-02): `docs/PARITY.md` records verified binding
   behavior, intentional divergences, and open items for the
   libhmm ↔ pylibhmm boundary. Check before / update after any
@@ -54,8 +65,11 @@ Last reconciled against live GitHub state: 2026-09-02.
 - None currently exist in this repository (checked 2026-07-14).
 
 ## GitHub Issues Without Milestone [DERIVED]
-- Open issues: 1 as of 2026-09-02 (none assigned a milestone):
-  - #16 Adopt mypy: annotate __init__.py wrapper surface
+- Open issues: 1 as of 2026-09-02 (live GitHub state not re-checked this
+  session — see below):
+  - #16 Adopt mypy: annotate __init__.py wrapper surface — implemented on
+    branch `chore/mypy-adoption` (2026-09-19), not committed/merged, so
+    left open here; close on GitHub once that branch merges.
 - Closed issues: 10 as of 2026-09-02 (#12 lint-in-CI; #13 format pass;
   #14 B017 triage + B rule adopted; #25/#26 v4.4.0 API bound — shipped
   in 0.12.0; #15 pin-currency CI job, see Cross-Repo Dependencies; fetch
@@ -67,12 +81,12 @@ Last reconciled against live GitHub state: 2026-09-02.
 - (none currently tracked — populate as work starts)
 
 ## Known Gaps [OPEN]
-- mypy is not adopted: `__init__.py`'s wrapper methods (`set_pi`,
-  `set_trans`, calculator/trainer `__init__`s, etc.) are only partially
-  annotated (many params like `pi`, `trans`, `sequences`, `observations`
-  have no type hints). Adopting mypy needs an annotation pass across
-  `__init__.py` first, not just an empty config. Tracked as GitHub issue
-  #16.
+- mypy adoption: **implemented 2026-09-19** (issue #16), on branch
+  `chore/mypy-adoption`, not yet merged. `__init__.py`'s wrapper surface
+  (`set_pi`, `set_trans`, calculator/trainer `__init__`s, `pi`/`trans`/
+  `sequences`/`observations` params, etc.) is now fully annotated; see
+  Decided for config and the two `__init__.pyi` fixes it surfaced.
+  Retained here until the branch merges.
 - Lint-in-CI: **closed 2026-09-02** (issue #12). ci.yml's `lint` job runs
   `ruff check` + `ruff format --check` (ruff version-pinned in the
   workflow — bump deliberately) and `scripts/lint-cpp.sh` (libhmm headers
@@ -211,8 +225,8 @@ Next up:
   upstream (minor if numbers users observe change — the 0.6.x
   pylibstats precedent). The next release also carries the two post-tag
   commits above.
-- DEFERRED past the adoption round: #16 mypy (a decision + annotation
-  pass; no drift cost to waiting).
+- #16 mypy: implemented 2026-09-19 on branch `chore/mypy-adoption` (see
+  Decided section) — no longer deferred. Needs merging.
 - Parity-ledger backlog (no issue filed): pre-0.12.0 surfaces are
   unaudited in ledger terms; audit opportunistically when touching
   them. One low-severity open item recorded in the ledger.
