@@ -33,11 +33,12 @@ from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
 from . import _core  # pylint: disable=import-self
 
 
-def _as_seed(seed) -> int:
+def _as_seed(seed: int) -> int:
     """Coerce *seed* to a non-negative int for the uint64 RNG boundary.
 
     Raises:
@@ -51,7 +52,7 @@ def _as_seed(seed) -> int:
     return seed
 
 
-def _as_f64_1d(values, name: str) -> np.ndarray:
+def _as_f64_1d(values: ArrayLike, name: str) -> NDArray[np.float64]:
     """Coerce *values* to a contiguous 1-D float64 array.
 
     Args:
@@ -69,7 +70,7 @@ def _as_f64_1d(values, name: str) -> np.ndarray:
     return np.ascontiguousarray(arr)
 
 
-def _as_f64_2d(values, name: str) -> np.ndarray:
+def _as_f64_2d(values: ArrayLike, name: str) -> NDArray[np.float64]:
     """Coerce *values* to a contiguous 2-D float64 array.
 
     Args:
@@ -87,7 +88,7 @@ def _as_f64_2d(values, name: str) -> np.ndarray:
     return np.ascontiguousarray(arr)
 
 
-def _as_sequence_list(sequences: Iterable[np.ndarray]) -> list[np.ndarray]:
+def _as_sequence_list(sequences: Iterable[ArrayLike]) -> list[NDArray[np.float64]]:
     """Validate and coerce each element of *sequences* to a 1-D float64 array.
 
     Args:
@@ -99,7 +100,7 @@ def _as_sequence_list(sequences: Iterable[np.ndarray]) -> list[np.ndarray]:
     Raises:
         ValueError: If *sequences* is empty or any element fails validation.
     """
-    converted: list[np.ndarray] = []
+    converted: list[NDArray[np.float64]] = []
     for i, seq in enumerate(sequences):
         converted.append(_as_f64_1d(seq, f"sequences[{i}]"))
     if not converted:
@@ -119,12 +120,12 @@ class Hmm(_core.Hmm):
         num_states: Number of hidden states.  Must be > 0.
     """
 
-    def __init__(self, num_states: int):
+    def __init__(self, num_states: int) -> None:
         if num_states <= 0:
             raise ValueError("num_states must be greater than 0")
         super().__init__(num_states)
 
-    def set_pi(self, pi) -> None:
+    def set_pi(self, pi: ArrayLike) -> None:
         """Set the initial state distribution π.
 
         Args:
@@ -141,7 +142,7 @@ class Hmm(_core.Hmm):
             raise ValueError("pi length must match num_states")
         super().set_pi(arr)
 
-    def set_trans(self, trans) -> None:
+    def set_trans(self, trans: ArrayLike) -> None:
         """Set the state transition probability matrix.
 
         Args:
@@ -175,10 +176,10 @@ class ForwardBackwardCalculator(_core.ForwardBackwardCalculator):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, observations):
+    def __init__(self, hmm: Hmm, observations: ArrayLike) -> None:
         super().__init__(hmm, _as_f64_1d(observations, "observations"))
 
-    def compute(self, observations=None):
+    def compute(self, observations: ArrayLike | None = None) -> None:
         """Re-run the algorithm, optionally on a new observation sequence.
 
         Args:
@@ -206,7 +207,7 @@ class ViterbiCalculator(_core.ViterbiCalculator):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, observations):
+    def __init__(self, hmm: Hmm, observations: ArrayLike) -> None:
         super().__init__(hmm, _as_f64_1d(observations, "observations"))
 
 
@@ -229,7 +230,7 @@ class BaumWelchTrainer(_core.BaumWelchTrainer):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, sequences):
+    def __init__(self, hmm: Hmm, sequences: Iterable[ArrayLike]) -> None:
         super().__init__(hmm, _as_sequence_list(sequences))
 
 
@@ -255,7 +256,9 @@ class ViterbiTrainer(_core.ViterbiTrainer):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, sequences, config=None):
+    def __init__(
+        self, hmm: Hmm, sequences: Iterable[ArrayLike], config: TrainingConfig | None = None
+    ) -> None:
         if config is None:
             config = TrainingConfig()
         super().__init__(hmm, _as_sequence_list(sequences), config)
@@ -279,7 +282,7 @@ class MapBaumWelchTrainer(_core.MapBaumWelchTrainer):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, sequences, pseudo_count: float = 1.0):
+    def __init__(self, hmm: Hmm, sequences: Iterable[ArrayLike], pseudo_count: float = 1.0) -> None:
         super().__init__(hmm, _as_sequence_list(sequences), pseudo_count)
 
 
@@ -306,7 +309,7 @@ class SegmentalKMeansTrainer(_core.SegmentalKMeansTrainer):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: Hmm, sequences, max_iterations: int = 100):
+    def __init__(self, hmm: Hmm, sequences: Iterable[ArrayLike], max_iterations: int = 100) -> None:
         super().__init__(hmm, _as_sequence_list(sequences), int(max_iterations))
 
 
@@ -464,7 +467,7 @@ def load_json(filepath: str | Path) -> Hmm:
     return result
 
 
-def load_hmm(filepath: str | Path):
+def load_hmm(filepath: str | Path) -> _core.Hmm:
     """Load an HMM from a legacy XML file written by :func:`save_hmm`.
 
     .. deprecated::
@@ -475,7 +478,9 @@ def load_hmm(filepath: str | Path):
         filepath: Path to the XML model file.
 
     Returns:
-        Reconstructed :class:`Hmm` instance.
+        The raw :class:`pylibhmm._core.Hmm` from the extension — unlike
+        :func:`from_json`/:func:`load_json`, this does not reconstruct the
+        Python-level validating :class:`Hmm` wrapper.
 
     Raises:
         RuntimeError: If the file cannot be read or parsed.
@@ -531,7 +536,9 @@ def clone_hmm(hmm: Hmm) -> Hmm:
     return result
 
 
-def sample(hmm: Hmm, T: int, seed: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+def sample(
+    hmm: Hmm, T: int, seed: int | None = None
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
     """Sample one observation sequence of length *T* from a scalar HMM.
 
     Draws ``s_0 ~ Categorical(pi)``, then per step ``o_t ~ emission(s_t)``
@@ -562,7 +569,7 @@ def sample(hmm: Hmm, T: int, seed: int | None = None) -> tuple[np.ndarray, np.nd
 
 def fit_best_of_n(
     hmm: Hmm,
-    sequences: Iterable[np.ndarray],
+    sequences: Iterable[ArrayLike],
     n_restarts: int,
     seed: int = 42,
     max_iters: int = 500,
@@ -650,7 +657,7 @@ FullCovGaussian = _core.FullCovGaussian
 IndependentComponents = _core.IndependentComponents
 
 
-def _as_mv_sequence_list(sequences) -> list[np.ndarray]:
+def _as_mv_sequence_list(sequences: Iterable[ArrayLike]) -> list[NDArray[np.float64]]:
     """Validate and coerce each element of *sequences* to a 2-D (T×D) float64 array.
 
     Args:
@@ -663,7 +670,7 @@ def _as_mv_sequence_list(sequences) -> list[np.ndarray]:
     Raises:
         ValueError: If *sequences* is empty or any element fails validation.
     """
-    converted: list[np.ndarray] = []
+    converted: list[NDArray[np.float64]] = []
     for i, seq in enumerate(sequences):
         arr = np.asarray(seq, dtype=np.float64)
         if arr.ndim != 2:
@@ -690,18 +697,18 @@ class HmmMV(_core.HmmMV):
         num_states: Number of hidden states.  Must be > 0.
     """
 
-    def __init__(self, num_states: int):
+    def __init__(self, num_states: int) -> None:
         if num_states <= 0:
             raise ValueError("num_states must be greater than 0")
         super().__init__(num_states)
 
-    def set_pi(self, pi) -> None:
+    def set_pi(self, pi: ArrayLike) -> None:
         arr = _as_f64_1d(pi, "pi")
         if arr.shape[0] != self.num_states:
             raise ValueError("pi length must match num_states")
         super().set_pi(arr)
 
-    def set_trans(self, trans) -> None:
+    def set_trans(self, trans: ArrayLike) -> None:
         arr = _as_f64_2d(trans, "trans")
         expected = (self.num_states, self.num_states)
         if arr.shape != expected:
@@ -717,7 +724,7 @@ class MVForwardBackwardCalculator(_core.MVForwardBackwardCalculator):
         observations: 2-D array-like of shape ``(T, D)``.
     """
 
-    def __init__(self, hmm: HmmMV, observations):
+    def __init__(self, hmm: HmmMV, observations: ArrayLike) -> None:
         obs = np.ascontiguousarray(np.asarray(observations, dtype=np.float64))
         if obs.ndim != 2:
             raise ValueError("observations must be a 2-D array (T, D)")
@@ -732,7 +739,7 @@ class MVBaumWelchTrainer(_core.MVBaumWelchTrainer):
         sequences: Iterable of 2-D array-like sequences, each shape ``(T_i, D)``.
     """
 
-    def __init__(self, hmm: HmmMV, sequences):
+    def __init__(self, hmm: HmmMV, sequences: Iterable[ArrayLike]) -> None:
         super().__init__(hmm, _as_mv_sequence_list(sequences))
 
 
@@ -749,7 +756,7 @@ class MVViterbiCalculator(_core.MVViterbiCalculator):
         observations: 2-D array-like of shape ``(T, D)``.
     """
 
-    def __init__(self, hmm: HmmMV, observations):
+    def __init__(self, hmm: HmmMV, observations: ArrayLike) -> None:
         obs = np.ascontiguousarray(np.asarray(observations, dtype=np.float64))
         if obs.ndim != 2:
             raise ValueError("observations must be a 2-D array (T, D)")
@@ -777,7 +784,9 @@ class MVMapBaumWelchTrainer(_core.MVMapBaumWelchTrainer):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: HmmMV, sequences, pseudo_count: float = 1.0):
+    def __init__(
+        self, hmm: HmmMV, sequences: Iterable[ArrayLike], pseudo_count: float = 1.0
+    ) -> None:
         super().__init__(hmm, _as_mv_sequence_list(sequences), float(pseudo_count))
 
 
@@ -809,11 +818,13 @@ class MVSegmentalKMeansTrainer(_core.MVSegmentalKMeansTrainer):
         at the C++ layer).
     """
 
-    def __init__(self, hmm: HmmMV, sequences, max_iterations: int = 100):
+    def __init__(
+        self, hmm: HmmMV, sequences: Iterable[ArrayLike], max_iterations: int = 100
+    ) -> None:
         super().__init__(hmm, _as_mv_sequence_list(sequences), int(max_iterations))
 
 
-def kmeans_init(hmm: HmmMV, sequences, seed: int = 42) -> None:
+def kmeans_init(hmm: HmmMV, sequences: Iterable[ArrayLike], seed: int = 42) -> None:
     """Initialise a multivariate HMM's emission distributions via k-means++.
 
     Runs Lloyd's algorithm with k-means++ seeding on all observation vectors.
@@ -895,7 +906,9 @@ def clone_hmm_mv(hmm: HmmMV) -> HmmMV:
     return result
 
 
-def sample_mv(hmm: HmmMV, T: int, seed: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+def sample_mv(
+    hmm: HmmMV, T: int, seed: int | None = None
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
     """Sample one observation sequence of length *T* from a multivariate HMM.
 
     Same chain as :func:`sample`; each observation is one D-dimensional row
@@ -927,7 +940,7 @@ def sample_mv(hmm: HmmMV, T: int, seed: int | None = None) -> tuple[np.ndarray, 
 
 def fit_best_of_n_mv(
     hmm: HmmMV,
-    sequences,
+    sequences: Iterable[ArrayLike],
     n_restarts: int,
     seed: int = 42,
     max_iters: int = 500,

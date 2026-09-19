@@ -63,17 +63,18 @@ jobs:
         run: pytest tests -v --tb=short
 
   # ---------------------------------------------------------------------------
-  # lint — ruff (check + format) and the C++ binding layer's cppcheck
-  # (GitHub issue #12).  One cheap Linux job; no extension build needed.
-  # ruff is pinned: an unpinned linter turns every ruff release into a
-  # potential red X on an unrelated push (same rationale as the
-  # cibuildwheel pin in wheels.yml) — bump it deliberately.
+  # lint — ruff (check + format), mypy (issue #16), and the C++ binding
+  # layer's cppcheck (GitHub issue #12).  One cheap Linux job; no extension
+  # build needed — mypy resolves `_core` through its hand-written `.pyi`.
+  # ruff and mypy are both pinned: an unpinned linter/type-checker turns
+  # every release into a potential red X on an unrelated push (same
+  # rationale as the cibuildwheel pin in wheels.yml) — bump deliberately.
   # lint-cpp.sh expects a ../libhmm sibling checkout for headers, so clone
   # the pinned tag parsed from CMakeLists.txt (the same GIT_TAG the
   # pin-currency job checks).
   # ---------------------------------------------------------------------------
   lint:
-    name: Lint (ruff + cppcheck)
+    name: Lint (ruff + mypy + cppcheck)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -89,6 +90,11 @@ jobs:
           pip install ruff==0.16.5
           ruff check src/pylibhmm tests examples
           ruff format --check src/pylibhmm tests examples
+
+      - name: mypy (src/pylibhmm/__init__.py)
+        run: |
+          pip install "numpy>=1.22" mypy==2.3.1
+          mypy
 
       - name: Clone libhmm headers at the pinned tag
         env:

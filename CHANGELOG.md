@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.12.1 (2026-09-19)
+
+Patch: typing only — no runtime behaviour change, same libhmm pin.
+
+### Changed
+- mypy adopted (issue #16): the wrapper surface of `__init__.py` is fully
+  annotated and checked in CI's lint job.
+
+### Fixed
+- Type stubs: `ModelCriteria` is declared as the `NamedTuple` it is at
+  runtime (the stub had a plain class, so tuple unpacking and indexing
+  failed type-checking).
+- Type stubs and docstring: `load_hmm` returns the raw `_core.Hmm`. Unlike
+  `load_json`/`from_json` it does not rebuild the validating `Hmm` wrapper;
+  the stub previously claimed it did.
+
 ## v0.12.0 (2026-09-02)
 
 Minor: new public surface (the libhmm v4.4.0 model-level API), on the
