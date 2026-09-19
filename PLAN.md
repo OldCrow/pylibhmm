@@ -83,9 +83,9 @@ Last reconciled against live GitHub state: 2026-09-02.
   wheels green on all five targets + sdist, PyPI 0.12.1 live, GitHub
   release published. Typing-only patch, same libhmm pin: mypy adopted
   (#16 closed) and two stub corrections (`ModelCriteria` NamedTuple;
-  `load_hmm` returns raw `_core.Hmm`). Open question, not filed: whether
-  `load_hmm` SHOULD rebuild the validating wrapper like `load_json` — it
-  is the deprecated XML path, so documenting may be the whole answer.
+  `load_hmm` returns raw `_core.Hmm`). Whether `load_hmm` SHOULD rebuild
+  the validating wrapper like `load_json` is filed as #31 (options: wrap,
+  keep documented, or deprecate the XML path harder); unmilestoned.
 - (none currently tracked — populate as work starts)
 
 ## Known Gaps [OPEN]
