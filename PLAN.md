@@ -251,8 +251,16 @@ Next up:
   wheel build.
   **Cap APPLIED 2026-09-28 [user]:** `pyproject.toml` requires
   `scikit-build-core>=0.10,<1.1`. The cap is a holding measure, not the
-  fix. [OPEN] No upstream issue existed on 2026-09-28; reproduce
-  minimally, then file one at scikit-build/scikit-build-core. [OPEN]
+  fix. CI verified it the same day: the `Python 3.14t` job
+  passes on the capped commit, resolving 1.0.3. [OPEN] No upstream issue
+  existed on 2026-09-28. Reproduce on CI, not locally — the failure is
+  Linux-only so far and the fleet has no free-threaded interpreter: a
+  throwaway branch with a `workflow_dispatch` job on `ubuntu-latest` /
+  3.14t / scikit-build-core 1.1.0 that prints the generated
+  `CMakeInit.txt` and `Python_FIND_ABI`, changing one variable at a time
+  (drop `wheel.py-api`; newer CMake). Then decide: upstream defect, or a
+  change to this repo's `find_package(Python ...)`; file upstream at
+  scikit-build/scikit-build-core if a defect. [OPEN]
   Lift the cap when a release fixes it: check upstream releases at
   every pin bump and whenever the monthly canary runs — nothing in CI
   flags a stale cap. To test a candidate release, remove the cap on a
