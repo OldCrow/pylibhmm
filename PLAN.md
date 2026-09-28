@@ -233,8 +233,14 @@ Next up:
   upstream (minor if numbers users observe change — the 0.6.x
   pylibstats precedent). The next release also carries the two post-tag
   commits above.
-- #16 mypy: implemented 2026-09-19 on branch `chore/mypy-adoption` (see
-  Decided section) — no longer deferred. Needs merging.
+- ~~#16 mypy~~ — DONE 2026-09-19 (merged as PR #30, shipped in 0.12.1).
+- **Return from travel 2026-09-28.** Cross-repo task order:
+  [CORVUS-ADOPTION-WORKPLAN.md](https://github.com/OldCrow/standards/blob/main/records/CORVUS-ADOPTION-WORKPLAN.md).
+  This repo's share: the #31 `load_hmm` wrapper decision (any machine),
+  then the pin bump after libhmm's patch. Open dependabot PR #32
+  (actionlint 1.76.3) is CI-green. [OPEN] pylibstats' `Python 3.14t`
+  job fails at CMake Python discovery; check whether this repo's matrix
+  has the same exposure.
 - Parity-ledger backlog (no issue filed): pre-0.12.0 surfaces are
   unaudited in ledger terms; audit opportunistically when touching
   them. One low-severity open item recorded in the ledger.
