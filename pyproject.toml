@@ -1,5 +1,10 @@
+# scikit-build-core is capped below 1.1 (2026-09-28). 1.1.0 (released
+# 2026-09-25) fails Python discovery on free-threaded CPython 3.14t with
+# CMake 3.31: "Could NOT find Python (missing: Interpreter
+# Development.Module)". 1.0.3 passes with everything else identical. Lift
+# the cap when upstream fixes it — PLAN.md carries the check.
 [build-system]
-requires = ["scikit-build-core>=0.10", "nanobind>=2.0"]
+requires = ["scikit-build-core>=0.10,<1.1", "nanobind>=2.0"]
 build-backend = "scikit_build_core.build"
 
 [project]

@@ -237,10 +237,27 @@ Next up:
 - **Return from travel 2026-09-28.** Cross-repo task order:
   [CORVUS-ADOPTION-WORKPLAN.md](https://github.com/OldCrow/standards/blob/main/records/CORVUS-ADOPTION-WORKPLAN.md).
   This repo's share: the #31 `load_hmm` wrapper decision (any machine),
-  then the pin bump after libhmm's patch. Open dependabot PR #32
-  (actionlint 1.76.3) is CI-green. [OPEN] pylibstats' `Python 3.14t`
-  job fails at CMake Python discovery; check whether this repo's matrix
-  has the same exposure.
+  then the pin bump after libhmm's patch.
+  [OPEN] The `ubuntu-latest / Python 3.14t` CI job fails at CMake
+  Python discovery (`Could NOT find Python (missing: Interpreter
+  Development.Module)`) on `main` in BOTH pylibstats and pylibhmm
+  (2026-09-28, after the dependabot merges); every other job is green.
+  Discriminator: scikit-build-core 1.0.3 passes, 1.1.0 fails, with
+  CPython 3.14.7t, nanobind 3.1.0 and CMake 3.31.6 identical. 1.1.0
+  reached PyPI 2026-09-25 20:48 UTC, an hour before the first failure;
+  `requires` has no upper bound. Likely mechanism, unconfirmed: 1.1.0
+  sets `Python_FIND_ABI` for free-threaded builds on CMake 3.30+.
+  `wheels.yml` ships cp314t, so the next release tag would fail its
+  wheel build.
+  **Cap APPLIED 2026-09-28 [user]:** `pyproject.toml` requires
+  `scikit-build-core>=0.10,<1.1`. The cap is a holding measure, not the
+  fix. [OPEN] No upstream issue existed on 2026-09-28; reproduce
+  minimally, then file one at scikit-build/scikit-build-core. [OPEN]
+  Lift the cap when a release fixes it: check upstream releases at
+  every pin bump and whenever the monthly canary runs — nothing in CI
+  flags a stale cap. To test a candidate release, remove the cap on a
+  branch and open a PR; the `Python 3.14t` job is the gate. Keep
+  pylibstats and pylibhmm on the same bound.
 - Parity-ledger backlog (no issue filed): pre-0.12.0 surfaces are
   unaudited in ledger terms; audit opportunistically when touching
   them. One low-severity open item recorded in the ledger.
