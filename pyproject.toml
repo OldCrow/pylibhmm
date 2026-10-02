@@ -4,7 +4,7 @@
 # Development.Module)". 1.0.3 passes with everything else identical. Lift
 # the cap when upstream fixes it — PLAN.md carries the check.
 [build-system]
-requires = ["scikit-build-core>=0.10,<1.1", "nanobind>=2.0"]
+requires = ["scikit-build-core>=0.10,<1.2", "nanobind>=2.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
