@@ -249,8 +249,11 @@ Next up:
   `>=0.10,!=1.1.0,<1.2`; the exclusion keeps every resolver off 1.1.0.
   Discriminator: pylibhmm #34 failed on 1.1.0 and pylibstats #25 passed
   on 1.1.1, both with CPython 3.14.8t and CMake 3.31.6 — so 1.1.1, not
-  the runner's Python bump, is the fix. [OPEN] Runners use CMake 3.31.6;
-  upstream recommends 4.1.2+ for free-threaded builds. Not required.
+  the runner's Python bump, is the fix. `[tool.scikit-build]` now
+  requires `cmake.version = ">=4.1.2"` (2026-10-04), upstream's
+  supported CMake for free-threaded builds; scikit-build-core fetches it
+  from PyPI over the runners' 3.31.6. No release bump — it ships with the
+  next version. Rule: CI House Style §9.
   Keep pylibstats and pylibhmm on the same scikit-build-core bound; the
   `Python 3.14t` job is the gate for any bound change.
 - Parity-ledger backlog (no issue filed): pre-0.12.0 surfaces are

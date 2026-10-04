@@ -41,6 +41,13 @@ lint = ["mypy==2.3.1"]
 # version where the broken form works. Do not set one without the other.
 wheel.py-api = "cp312"
 cmake.build-type = "Release"
+# Upstream's supported path for free-threaded (3.14t) builds is CMake 4.1.2+:
+# below it, scikit-build-core cannot set Python_FIND_ABI without breaking
+# Development.Module discovery (scikit-build/scikit-build-core#1597). Hosted
+# runners ship CMake 3.31, so scikit-build-core downloads a newer CMake from
+# PyPI whenever the one on PATH is older — in CI and in sdist builds alike.
+# cmake_minimum_required in CMakeLists.txt stays 3.25 for direct CMake builds.
+cmake.version = ">=4.1.2"
 wheel.packages = ["src/pylibhmm"]
 editable.mode = "redirect"
 
