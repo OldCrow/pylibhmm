@@ -238,34 +238,21 @@ Next up:
   [CORVUS-ADOPTION-WORKPLAN.md](https://github.com/OldCrow/standards/blob/main/records/CORVUS-ADOPTION-WORKPLAN.md).
   This repo's share: the #31 `load_hmm` wrapper decision (any machine),
   then the pin bump after libhmm's patch.
-  [OPEN] The `ubuntu-latest / Python 3.14t` CI job fails at CMake
+  ~~[OPEN] `Python 3.14t` CI failure~~ **RESOLVED 2026-10-04.** From
+  2026-09-28 the `ubuntu-latest / Python 3.14t` job failed at CMake
   Python discovery (`Could NOT find Python (missing: Interpreter
-  Development.Module)`) on `main` in BOTH pylibstats and pylibhmm
-  (2026-09-28, after the dependabot merges); every other job is green.
-  Discriminator: scikit-build-core 1.0.3 passes, 1.1.0 fails, with
-  CPython 3.14.7t, nanobind 3.1.0 and CMake 3.31.6 identical. 1.1.0
-  reached PyPI 2026-09-25 20:48 UTC, an hour before the first failure;
-  `requires` has no upper bound. Likely mechanism, unconfirmed: 1.1.0
-  sets `Python_FIND_ABI` for free-threaded builds on CMake 3.30+.
-  `wheels.yml` ships cp314t, so the next release tag would fail its
-  wheel build.
-  **Cap APPLIED 2026-09-28 [user]:** `pyproject.toml` requires
-  `scikit-build-core>=0.10,<1.1`. The cap is a holding measure, not the
-  fix. CI verified it the same day: the `Python 3.14t` job
-  passes on the capped commit, resolving 1.0.3. [OPEN] No upstream issue
-  existed on 2026-09-28. Reproduce on CI, not locally — the failure is
-  Linux-only so far and the fleet has no free-threaded interpreter: a
-  throwaway branch with a `workflow_dispatch` job on `ubuntu-latest` /
-  3.14t / scikit-build-core 1.1.0 that prints the generated
-  `CMakeInit.txt` and `Python_FIND_ABI`, changing one variable at a time
-  (drop `wheel.py-api`; newer CMake). Then decide: upstream defect, or a
-  change to this repo's `find_package(Python ...)`; file upstream at
-  scikit-build/scikit-build-core if a defect. [OPEN]
-  Lift the cap when a release fixes it: check upstream releases at
-  every pin bump and whenever the monthly canary runs — nothing in CI
-  flags a stale cap. To test a candidate release, remove the cap on a
-  branch and open a PR; the `Python 3.14t` job is the gate. Keep
-  pylibstats and pylibhmm on the same bound.
+  Development.Module)`) in BOTH pylibstats and pylibhmm. Cause, upstream:
+  scikit-build-core 1.1.0 set `Python_FIND_ABI` for free-threaded builds,
+  and CMake 3.30–4.1.1 then cannot find `Development.Module`
+  (scikit-build/scikit-build-core#1597). 1.1.1 (2026-10-02) sets it only
+  on CMake 4.1.2+. The `<1.1` cap (2026-09-28) is replaced by
+  `>=0.10,!=1.1.0,<1.2`; the exclusion keeps every resolver off 1.1.0.
+  Discriminator: pylibhmm #34 failed on 1.1.0 and pylibstats #25 passed
+  on 1.1.1, both with CPython 3.14.8t and CMake 3.31.6 — so 1.1.1, not
+  the runner's Python bump, is the fix. [OPEN] Runners use CMake 3.31.6;
+  upstream recommends 4.1.2+ for free-threaded builds. Not required.
+  Keep pylibstats and pylibhmm on the same scikit-build-core bound; the
+  `Python 3.14t` job is the gate for any bound change.
 - Parity-ledger backlog (no issue filed): pre-0.12.0 surfaces are
   unaudited in ledger terms; audit opportunistically when touching
   them. One low-severity open item recorded in the ledger.
