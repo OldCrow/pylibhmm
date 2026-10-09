@@ -21,7 +21,7 @@ test = ["pytest>=7.0"]
 # ruff is pinned directly in ci.yml (not sourced from here) so its version
 # bump stays deliberate there; mypy is listed here too for local dev parity
 # with the CI pin (see ci.yml's lint job).
-lint = ["mypy==2.3.1"]
+lint = ["mypy==2.4.0"]
 
 [tool.scikit-build]
 # Build one CPython Stable ABI (abi3) wheel covering 3.12 and every later
