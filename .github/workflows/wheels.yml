@@ -4,11 +4,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-  # Monthly canary: builds wheels (cibuildwheel/manylinux drift is otherwise
+  # Weekly canary: builds wheels (cibuildwheel/manylinux drift is otherwise
   # only discovered at actual release time, the worst moment). The publish
   # job below stays gated on refs/tags/v*, so a schedule run never publishes.
   schedule:
-    - cron: '25 3 1 * *'
+    - cron: '25 3 * * 1'
 
 permissions:
   contents: read
@@ -154,3 +154,32 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1 (v1.14.1)
         with:
           packages-dir: dist
+
+  # Canary failure report (CI House Style section 8). GitHub notifies only
+  # whoever last edited the cron line when a scheduled run fails, so this
+  # opens an issue instead, or comments on the one already open. It never
+  # runs on push or pull_request.
+  canary-report:
+    name: Canary failure report
+    needs: [build-wheels, build-sdist]
+    if: always() && github.event_name == 'schedule' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the canary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Canary failed: ${WORKFLOW}"
+          body="The scheduled run of ${WORKFLOW} failed with no push to trigger it: ${RUN_URL}"
+          number=$(gh issue list --repo "$REPO" --state open --search "\"${title}\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi

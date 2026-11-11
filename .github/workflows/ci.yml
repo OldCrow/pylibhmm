@@ -7,13 +7,13 @@ on:
   pull_request:
     branches: [main]
     paths-ignore: ['**.md', 'docs/**', 'LICENSE']
-  # Monthly canary: catches drift with no code change to trigger it (Python
+  # Weekly canary: catches drift with no code change to trigger it (Python
   # release cycle, runner image rolls, stale libhmm pin) instead of
   # discovering breakage at the next real push.
   schedule:
-    - cron: '20 3 1 * *'
+    - cron: '20 3 * * 1'
   # Lets the canary-only jobs (pin-currency) be run on demand without
-  # waiting for the monthly cron.
+  # waiting for the weekly cron.
   workflow_dispatch:
 
 permissions:
@@ -163,7 +163,7 @@ jobs:
             pytest tests -v --tb=short
 
   # ---------------------------------------------------------------------------
-  # pin-currency — canary-only (monthly cron / manual dispatch), not on push
+  # pin-currency — canary-only (weekly cron / manual dispatch), not on push
   # or PR: this asks "is the pin still the RIGHT tag?", which is a different
   # question from "does the pinned tag still build?".  The latter is already
   # covered on every run, because CI has no ../libhmm sibling and so always
@@ -220,3 +220,32 @@ jobs:
             exit 1
           fi
           echo "pin is current"
+
+  # Canary failure report (CI House Style section 8). GitHub notifies only
+  # whoever last edited the cron line when a scheduled run fails, so this
+  # opens an issue instead, or comments on the one already open. It never
+  # runs on push or pull_request.
+  canary-report:
+    name: Canary failure report
+    needs: [build-and-test, lint, asan, pin-currency]
+    if: always() && github.event_name == 'schedule' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the canary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Canary failed: ${WORKFLOW}"
+          body="The scheduled run of ${WORKFLOW} failed with no push to trigger it: ${RUN_URL}"
+          number=$(gh issue list --repo "$REPO" --state open --search "\"${title}\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi
