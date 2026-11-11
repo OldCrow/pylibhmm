@@ -34,12 +34,21 @@ jobs:
             cibw_archs_linux: aarch64
           # ubuntu-24.04-arm is pinned because GitHub documents no floating
           # arm64 Linux label; the build itself runs in a manylinux container.
-          #
-          # macOS: one Apple Silicon job builds both arches. x86_64 is
-          # cross-compiled and its wheel is tested under Rosetta. This replaced
-          # a native macos-15-intel job, the last Intel image GitHub hosts.
-          - name: macos
+          - name: macos-arm64
             os: macos-latest
+            cibw_archs_macos: arm64
+            cibw_archs_linux: ""
+          # macos-15-intel is pinned because x86_64 cannot be cross-built on
+          # Apple Silicon yet: libhmm's SimdDispatch.cmake reads
+          # CMAKE_SYSTEM_PROCESSOR, which names the arm64 build host, and
+          # passes -march=armv8-a to the x86_64 compile (tried 2026-11-11,
+          # run 43053531058, libhmm v4.4.1). This is the last Intel image
+          # GitHub hosts; move to one macos-latest job with
+          # CIBW_ARCHS_MACOS "x86_64 arm64" once libhmm derives the target
+          # arch from CMAKE_OSX_ARCHITECTURES.
+          - name: macos-x86_64
+            os: macos-15-intel
+            cibw_archs_macos: x86_64
             cibw_archs_linux: ""
           - name: windows
             os: windows-latest
@@ -63,10 +72,9 @@ jobs:
       - name: Build wheels
         run: cibuildwheel --output-dir wheelhouse
         env:
-          # macOS: x86_64 and arm64 as two thin wheels. Cross-building x86_64
-          # is safe only because LIBHMM_PORTABLE=ON (below) replaces
-          # -march=native, which would otherwise probe the arm64 build host.
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          # macOS: each job builds only its native arch; see the matrix comment
+          # for why x86_64 is not cross-built.
+          CIBW_ARCHS_MACOS: ${{ matrix.cibw_archs_macos }}
           # libhmm v4 sets CMAKE_OSX_DEPLOYMENT_TARGET=13.0; the wheel target
           # must match or delocate rejects the bundled dylib.
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=13.0"
