@@ -41,6 +41,19 @@
   invocation (not a copy of libhmm's), requiring `--language=c++` for
   `_common.h` and a path-based suppression for libhmm's own headers.
   Verified clean as of 2026-07-14.
+- **CI and tooling [2026-11-11]** (rules and incidents: CI House Style §1,
+  §6, §8).
+  - Runner labels float, except two in `wheels.yml`, each with its reason
+    beside it (#48): `ubuntu-24.04-arm` (no floating arm64 Linux label)
+    and `macos-15-intel` (see Known Gaps).
+  - The canaries run weekly (Monday; `ci.yml` 03:20, `wheels.yml` 03:25
+    UTC). A `canary-report` job in each opens a "Canary failed" issue, or
+    comments on the open one (#49). `pin-currency` therefore runs weekly.
+  - Pre-commit (#50): file-hygiene hooks and ruff, enforced by a
+    `precommit` CI job on all files. ruff left the `lint` job; the hook
+    `rev` is its only pin (0.17.4 since #52). `.gitattributes` sets LF.
+  - Dependabot updates the hook revs (`pre-commit` ecosystem).
+  - `reviewdog/action-actionlint` stays at v1.83.0 or newer (#51).
 
 ## GitHub Synchronization [DERIVED]
 Last reconciled against live GitHub state: 2026-09-02.
@@ -106,6 +119,14 @@ Last reconciled against live GitHub state: 2026-09-02.
   alongside it. Now caught mechanically by the `pin-currency` canary job —
   see Cross-Repo Dependencies. Retained here as a record of why the check
   exists, not as an open gap.
+- **macOS x86_64 wheels still need the last Intel runner** [OPEN,
+  2026-11-11]. Cross-building x86_64 on `macos-latest` failed on libhmm
+  v4.4.1 (Actions run 43053531058: `unknown target CPU 'armv8-a'`),
+  because libhmm chose its SIMD path from the build host. libhmm fixed
+  that on `main` (libhmm #149) but has not released it. Next: when a
+  libhmm release carries #149, bump `GIT_TAG`, replace the two macOS
+  wheel jobs with one `macos-latest` job building `x86_64 arm64`, and
+  dispatch `wheels.yml` to confirm before the next tag.
 
 ## Cross-Repo Dependencies [OPEN]
 Pins libhmm via `FetchContent` at the `GIT_TAG` in `CMakeLists.txt` —
