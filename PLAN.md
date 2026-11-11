@@ -116,7 +116,7 @@ before (libhmm's own PLAN.md carried a wrong value and a fabricated
 documentation.
 
 Currency is enforced mechanically, not by prose: the `pin-currency` job in
-the monthly CI canary compares `GIT_TAG` against libhmm's newest release
+the weekly CI canary compares `GIT_TAG` against libhmm's newest release
 tag and fails on mismatch (GitHub issue #15).
 
 **Done 2026-08-26**: pin bumped to libhmm v4.4.1 (correctness patch,
@@ -143,7 +143,7 @@ CI has no `../libhmm` sibling, so every CI run already exercises
 `FetchContent`. Verified manually on macOS/AppleClang 2026-07-24 —
 configure + build + 55-symbol import against the pin, clean. Note that
 buildability and currency are different questions; CI covers the first on
-every run, the second only monthly.
+every run, the second only weekly.
 
 ## Build-Stack Standardization (2026-07-23) [DERIVED]
 Cross-repo effort tracked in the fleet standards repo
