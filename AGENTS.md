@@ -125,16 +125,24 @@ requirement.
 
 ### Linting
 
-**Python** (`src/pylibhmm/__init__.py`, `tests/`, `examples/`): ruff, config
-in `pyproject.toml`. Rules: `B`/`E`/`F`/`I`/`UP` — `B` (flake8-bugbear) was
+**Pre-commit** (`.pre-commit-config.yaml`): trailing-whitespace,
+end-of-file-fixer, mixed-line-ending (LF), check-yaml/json,
+check-merge-conflict, check-case-conflict, check-added-large-files, and ruff
+(check + format). Enable locally with `python -m pip install pre-commit`, then
+`python -m pre_commit install`. The `precommit` CI job runs the same config on
+all files and is the gate; the local hook is opt-in per clone.
+
+**Python** (`src/pylibhmm`, `tests/`, `examples/`, `.pyi` stubs included):
+ruff via pre-commit, config in `pyproject.toml`; its only version pin is the
+hook `rev`. Rules: `B`/`E`/`F`/`I`/`UP` — `B` (flake8-bugbear) was
 adopted at 0.12.0 after confirming every previously-blind
 `pytest.raises(Exception)` site actually raises `ValueError` (nanobind's
 translation of `std::invalid_argument`); tests now assert that exact type.
 `.pyi` stubs are exempt from the line-length rule (compact single-line
 signatures are idiomatic there).
 ```bash
-ruff check src/pylibhmm tests examples
-ruff format src/pylibhmm tests examples   # applied repo-wide at v0.11.1+ (issue #13)
+python -m pre_commit run ruff-check --all-files
+python -m pre_commit run ruff-format --all-files   # applied repo-wide at v0.11.1+ (issue #13)
 ```
 pyright runs via the editor/agent language server only, not CI (`[tool.pyright]`
 points it at `.venv` so `numpy` and the editable install resolve); baseline
@@ -163,6 +171,9 @@ Fleet-wide workflow rules (runner budget, bounded parallelism, ISA hazards on
 hosted runners, action pinning, wheel builds):
 [CI House Style](https://github.com/OldCrow/standards/blob/main/CI-HOUSE-STYLE.md).
 
+`ci.yml` runs a `precommit` job (the same hook config on all files) and a
+`lint` job (mypy, `scripts/lint-cpp.sh`).
+
 Wheel builds follow the fleet wheel contract
 ([CI House Style §9](https://github.com/OldCrow/standards/blob/main/CI-HOUSE-STYLE.md#9-wheel-builds-pylibhmm-pylibstats)),
 settled here at v0.10.0. §9 carries the rules and the incidents behind them,
@@ -175,7 +186,7 @@ Release checklist:
 2. CI matrix passes on Linux/macOS/Windows.
 3. API docs and stubs updated.
 4. Wheel portability considerations reviewed against `docs/COMPATIBILITY.md`.
-5. `ruff check`, `ruff format --check`, and `scripts/lint-cpp.sh` pass (all enforced by ci.yml's `lint` job; ruff is version-pinned there — bump it deliberately).
+5. `pre-commit run --all-files` (ruff check/format included) and `scripts/lint-cpp.sh` pass (enforced by ci.yml's `precommit` and `lint` jobs; ruff is pinned by the hook `rev` in `.pre-commit-config.yaml` — bump it deliberately).
 
 ## Reading map — load on demand, not preemptively
 - Full architecture detail (build model, dependency resolution,
