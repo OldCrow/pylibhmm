@@ -1,0 +1,29 @@
+default_language_version:
+  python: python3
+
+exclude: '^(build|build-debug|_skbuild|\.venv|venv)/'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # Same paths as CI checked before this hook (src/pylibhmm, tests, examples),
+  # .pyi stubs included; config comes from pyproject.toml.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.5
+    hooks:
+      - id: ruff-check
+        files: '^(src/pylibhmm|tests|examples)/'
+      - id: ruff-format
+        files: '^(src/pylibhmm|tests|examples)/'

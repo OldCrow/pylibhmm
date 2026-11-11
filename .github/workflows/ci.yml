@@ -62,19 +62,11 @@ jobs:
       - name: Run tests
         run: pytest tests -v --tb=short
 
-  # ---------------------------------------------------------------------------
-  # lint — ruff (check + format), mypy (issue #16), and the C++ binding
-  # layer's cppcheck (GitHub issue #12).  One cheap Linux job; no extension
-  # build needed — mypy resolves `_core` through its hand-written `.pyi`.
-  # ruff and mypy are both pinned: an unpinned linter/type-checker turns
-  # every release into a potential red X on an unrelated push (same
-  # rationale as the cibuildwheel pin in wheels.yml) — bump deliberately.
-  # lint-cpp.sh expects a ../libhmm sibling checkout for headers, so clone
-  # the pinned tag parsed from CMakeLists.txt (the same GIT_TAG the
-  # pin-currency job checks).
-  # ---------------------------------------------------------------------------
-  lint:
-    name: Lint (ruff + mypy + cppcheck)
+  # Runs the same hooks as the local pre-commit hook (CI House Style §6): the
+  # local hook is opt-in per clone, so this job is the gate. Owns ruff (the
+  # hook rev in .pre-commit-config.yaml is its only pin).
+  precommit:
+    name: Pre-commit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -84,12 +76,39 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Install pre-commit
+        run: python -m pip install pre-commit==4.7.0
+      - name: Run all hooks on all files
+        run: pre-commit run --all-files --show-diff-on-failure --color=always
 
-      - name: ruff check and format
-        run: |
-          pip install ruff==0.16.5
-          ruff check src/pylibhmm tests examples
-          ruff format --check src/pylibhmm tests examples
+  # ---------------------------------------------------------------------------
+  # lint — mypy (issue #16) and the C++ binding
+  # layer's cppcheck (GitHub issue #12).  One cheap Linux job; no extension
+  # build needed — mypy resolves `_core` through its hand-written `.pyi`.
+  # mypy is pinned: an unpinned type-checker turns every release into a
+  # potential red X on an unrelated push (same rationale as the
+  # cibuildwheel pin in wheels.yml) — bump deliberately. ruff runs in the
+  # precommit job.
+  # lint-cpp.sh expects a ../libhmm sibling checkout for headers, so clone
+  # the pinned tag parsed from CMakeLists.txt (the same GIT_TAG the
+  # pin-currency job checks).
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (mypy + cppcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
 
       - name: mypy (src/pylibhmm/__init__.py)
         run: |
@@ -227,7 +246,7 @@ jobs:
   # runs on push or pull_request.
   canary-report:
     name: Canary failure report
-    needs: [build-and-test, lint, asan, pin-currency]
+    needs: [build-and-test, precommit, lint, asan, pin-currency]
     if: always() && github.event_name == 'schedule' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
